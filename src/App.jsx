@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import ReactGA from "react-ga4";
 
 // ─── Config ───────────────────────────────────────────────────────────
 const LS_KEY = "ecobites_hub_v4";
@@ -19,6 +20,8 @@ const TABS = [
   { id: "carousel",   label: "🎬 Carusel/Video"},
   { id: "blog",       label: "✍️ Blog"         },
   { id: "buffer",     label: "📤 Buffer"       },
+  { id: "manual",     label: "✏️ Manual & Editor" },
+  { id: "reports",    label: "📊 Rapoarte"     },
 ];
 
 const OBJECTIVES = [
@@ -35,30 +38,62 @@ const INTERESTS = [
   "Remedii naturiste","Superalimente","Apicultură","Ayurveda",
 ];
 
-// Modele OpenRouter actualizate – doar cele confirmate funcționale (inclusiv gpt-oss-120b:free)
+// Modele OpenRouter (gratuite + plătite)
 const OR_MODELS = [
-  { id:"google/gemma-4-31b-it:free",              label:"Gemma 4 31B (free)",      tag:"FREE"  },
-  { id:"openai/gpt-oss-120b:free",                label:"GPT-OSS 120B (free?)",    tag:"FREE"  },
-  { id:"deepseek/deepseek-chat",                  label:"DeepSeek Chat",           tag:"CHEAP" },
-  { id:"meta-llama/llama-3.3-70b-instruct",       label:"Llama 3.3 70B",           tag:"CHEAP" },
-  { id:"anthropic/claude-haiku-4-5",              label:"Claude Haiku 4.5",        tag:"CHEAP" },
-  { id:"openai/gpt-4o-mini",                      label:"GPT-4o Mini",             tag:"CHEAP" },
-  { id:"mistralai/mistral-small-3.1-24b-instruct",label:"Mistral Small 3.1",       tag:"CHEAP" },
+  { id:"nvidia/nemotron-3-super-120b-a12b:free",        label:"Nemotron 3 Super 120B",   tag:"FREE" },
+  { id:"z-ai/glm-4.5-air:free",                        label:"GLM 4.5 Air",            tag:"FREE" },
+  { id:"openai/gpt-oss-120b:free",                     label:"GPT-OSS 120B",           tag:"FREE" },
+  { id:"nvidia/nemotron-3-nano-30b-a3b:free",          label:"Nemotron 3 Nano 30B",    tag:"FREE" },
+  { id:"minimax/minimax-m2.5:free",                    label:"MiniMax M2.5",           tag:"FREE" },
+  { id:"nvidia/nemotron-nano-9b-v2:free",              label:"Nemotron Nano 9B",       tag:"FREE" },
+  { id:"google/gemma-4-31b-it:free",                   label:"Gemma 4 31B",            tag:"FREE" },
+  { id:"nvidia/nemotron-nano-12b-v2-vl:free",          label:"Nemotron Nano 12B VL",   tag:"FREE" },
+  { id:"nvidia/llama-nemotron-embed-vl-1b-v2:free",    label:"Llama Nemotron Embed",   tag:"FREE" },
+  { id:"google/gemma-4-26b-a4b-it:free",               label:"Gemma 4 26B",            tag:"FREE" },
+  { id:"openai/gpt-oss-20b:free",                      label:"GPT-OSS 20B",            tag:"FREE" },
+  { id:"qwen/qwen3-coder:free",                        label:"Qwen3 Coder",            tag:"FREE" },
+  { id:"meta-llama/llama-3.3-70b-instruct:free",       label:"Llama 3.3 70B",          tag:"FREE" },
+  { id:"qwen/qwen3-next-80b-a3b-instruct:free",        label:"Qwen3 Next 80B",         tag:"FREE" },
+  { id:"liquid/lfm-2.5-1.2b-thinking:free",            label:"LFM 1.2B Thinking",      tag:"FREE" },
+  { id:"liquid/lfm-2.5-1.2b-instruct:free",            label:"LFM 1.2B Instruct",      tag:"FREE" },
+  { id:"google/gemma-3-27b-it:free",                   label:"Gemma 3 27B",            tag:"FREE" },
+  { id:"cognitivecomputations/dolphin-mistral-24b-venice-edition:free", label:"Dolphin Mistral 24B", tag:"FREE" },
+  { id:"nousresearch/hermes-3-llama-3.1-405b:free",    label:"Hermes 3 405B",          tag:"FREE" },
+  { id:"meta-llama/llama-3.2-3b-instruct:free",        label:"Llama 3.2 3B",           tag:"FREE" },
+  { id:"google/gemma-3-4b-it:free",                    label:"Gemma 3 4B",             tag:"FREE" },
+  { id:"google/gemma-3-12b-it:free",                   label:"Gemma 3 12B",            tag:"FREE" },
+  { id:"google/gemma-3n-e2b-it:free",                  label:"Gemma 3n E2B",           tag:"FREE" },
+  { id:"google/gemma-3n-e4b-it:free",                  label:"Gemma 3n E4B",           tag:"FREE" },
+  { id:"deepseek/deepseek-chat",                       label:"DeepSeek Chat (paid)",    tag:"CHEAP" },
+  { id:"openai/gpt-4o-mini",                           label:"GPT-4o Mini (paid)",      tag:"CHEAP" },
 ];
 
-// ─── Helpers ──────────────────────────────────────────────────────────
+// Helpers
 function loadCfg()    { try { return JSON.parse(localStorage.getItem(LS_KEY)) || {}; } catch { return {}; } }
 function saveCfg(s)   { try { localStorage.setItem(LS_KEY, JSON.stringify(s)); } catch {} }
 function lsGet(k)     { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch { return null; } }
 function lsSet(k, v)  { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 
-// ─── Component ────────────────────────────────────────────────────────
 export default function EcoBitesHub() {
   const saved = loadCfg();
 
+  // Inițializare Google Analytics
+  useEffect(() => {
+    if (import.meta.env.VITE_GA_MEASUREMENT_ID) {
+      ReactGA.initialize(import.meta.env.VITE_GA_MEASUREMENT_ID);
+    } else {
+      console.warn("GA Measurement ID not set – analytics will not work.");
+    }
+  }, []);
+
+  // Trimite page view la schimbarea tab-ului
+  useEffect(() => {
+    ReactGA.send({ hitType: "pageview", page: tab });
+  }, [tab]);
+
   // ── Settings state ──────────────────────────────────────────────────
   const [showSettings, setShowSettings] = useState(false);
-  const [provider,     setProvider]     = useState(saved.provider    || "anthropic");
+  const [provider,     setProvider]     = useState(saved.provider    || "openrouter");
   const [geminiKey,    setGeminiKey]    = useState(saved.geminiKey   || "");
   const [geminiModel,  setGeminiModel]  = useState(saved.geminiModel || "gemini-2.0-flash");
   const [orKey,        setOrKey]        = useState(saved.orKey       || "");
@@ -69,43 +104,85 @@ export default function EcoBitesHub() {
   const [feedUrl,      setFeedUrl]      = useState(saved.feedUrl     || "");
   const [bufferKey,    setBufferKey]    = useState(saved.bufferKey   || "");
   const [keysVisible,  setKeysVisible]  = useState(false);
+  const [priceMin,     setPriceMin]     = useState(saved.priceMin || 0);
+  const [priceMax,     setPriceMax]     = useState(saved.priceMax || 9999);
+  const [sheetWebAppUrl, setSheetWebAppUrl] = useState(saved.sheetWebAppUrl || "");
 
-  // ── App state ───────────────────────────────────────────────────────
-  const [tab,      setTab]      = useState("sync");
-  const [loading,  setLoading]  = useState(false);
-  const [loadMsg,  setLoadMsg]  = useState("");
-  const [copied,   setCopied]   = useState(null);
+  // Brand & ton settings
+  const [brandDescription, setBrandDescription] = useState(saved.brandDescription || "EcoBites – produse naturale pentru un stil de viață sănătos.");
+  const [brandValues, setBrandValues] = useState(saved.brandValues || "Calitate, sustenabilitate, tradiție, inovație.");
+  const [brandLinks, setBrandLinks] = useState(saved.brandLinks || "https://ecobites.ro, https://facebook.com/ecobites, https://instagram.com/ecobites");
+  const [postTone, setPostTone] = useState(saved.postTone || "prietenos");
+  const [useEmoji, setUseEmoji] = useState(saved.useEmoji !== undefined ? saved.useEmoji : true);
+  const [includeBrandText, setIncludeBrandText] = useState(saved.includeBrandText !== undefined ? saved.includeBrandText : true);
+  const [defaultHashtags, setDefaultHashtags] = useState(saved.defaultHashtags || "#naturist #bio #romania #wellness");
+
+  // Templates
+  const [templates, setTemplates] = useState(saved.templates || { facebook: "", instagram: "" });
+
+  // Manual selection & editor
+  const [selectedProducts, setSelectedProducts] = useState([]);
+  const [editedPosts, setEditedPosts] = useState({});
+  const [filter, setFilter] = useState("");
+
+  // App state
+  const [tab,          setTab]          = useState("sync");
+  const [loading,      setLoading]      = useState(false);
+  const [loadMsg,      setLoadMsg]      = useState("");
+  const [copied,       setCopied]       = useState(null);
 
   // Catalog
-  const [catalog,     setCatalog]     = useState(() => lsGet("eb_catalog")   || []);
-  const [catalogDate, setCatalogDate] = useState(() => localStorage.getItem("eb_catalog_date") || "");
+  const [catalog,      setCatalog]      = useState(() => lsGet("eb_catalog")   || []);
+  const [catalogDate,  setCatalogDate]  = useState(() => localStorage.getItem("eb_catalog_date") || "");
 
   // Trends
-  const [trends,     setTrends]     = useState(() => lsGet("eb_trends")    || null);
-  const [trendsDate, setTrendsDate] = useState(() => localStorage.getItem("eb_trends_date") || "");
+  const [trends,       setTrends]       = useState(() => lsGet("eb_trends")    || null);
+  const [trendsDate,   setTrendsDate]   = useState(() => localStorage.getItem("eb_trends_date") || "");
+  const [googleTrends, setGoogleTrends] = useState(null);
+  const [useGoogleTrends, setUseGoogleTrends] = useState(true);
+  const [trendHistory, setTrendHistory] = useState(() => {
+    const hist = localStorage.getItem("eb_trends_history");
+    return hist ? JSON.parse(hist) : [];
+  });
 
-  // Selected product (from catalog / trends)
-  const [selProd, setSelProd] = useState(null);
+  const [postPlatform, setPostPlatform] = useState({});
+  const [selectedPosts, setSelectedPosts] = useState({});
+  const [historySort, setHistorySort] = useState("date_desc");
 
-  // Meta Ads wizard
-  const [adsStep,   setAdsStep]   = useState(1);
-  const [objective, setObjective] = useState(null);
-  const [adProd,    setAdProd]    = useState({ name:"", price:"", benefits:"", link:"", imageUrl:null });
-  const [adCopy,    setAdCopy]    = useState({ variants:[], selected:null, error:null });
-  const [targeting, setTargeting] = useState({ ageMin:25, ageMax:55, gender:"all", interests:[], budgetMonthly:100, durationDays:30 });
+  // Meta Ads
+  const [adsStep,      setAdsStep]      = useState(1);
+  const [objective,    setObjective]    = useState(null);
+  const [adProd,       setAdProd]       = useState({ name:"", price:"", benefits:"", link:"", imageUrl:null });
+  const [adCopy,       setAdCopy]       = useState({ variants:[], selected:null, error:null });
+  const [targeting,    setTargeting]    = useState({ ageMin:25, ageMax:55, gender:"all", interests:[], budgetMonthly:100, durationDays:30 });
 
-  // Outputs
   const [newsletterOut, setNewsletterOut] = useState([]);
   const [carouselOut,   setCarouselOut]   = useState("");
   const [blogOut,       setBlogOut]       = useState(null);
   const [bufferStatus,  setBufferStatus]  = useState("");
 
+  // OpenRouter testing
+  const [activeFreeModels, setActiveFreeModels] = useState(() => {
+    const savedActive = localStorage.getItem("eb_active_free_models");
+    return savedActive ? JSON.parse(savedActive) : [];
+  });
+  const [testingModels, setTestingModels] = useState(false);
+  const [modelTestResults, setModelTestResults] = useState({});
+
   const adImgRef = useRef();
 
-  // Save settings on change (include geminiModel)
+  // Save settings
   useEffect(() => {
-    saveCfg({ provider, geminiKey, geminiModel, orKey, orModel, orCustom, hfKey, hfModel, feedUrl, bufferKey });
-  }, [provider, geminiKey, geminiModel, orKey, orModel, orCustom, hfKey, hfModel, feedUrl, bufferKey]);
+    saveCfg({
+      provider, geminiKey, geminiModel, orKey, orModel, orCustom, hfKey, hfModel,
+      feedUrl, bufferKey, priceMin, priceMax, sheetWebAppUrl,
+      brandDescription, brandValues, brandLinks, postTone, useEmoji, includeBrandText, defaultHashtags,
+      templates
+    });
+  }, [provider, geminiKey, geminiModel, orKey, orModel, orCustom, hfKey, hfModel,
+      feedUrl, bufferKey, priceMin, priceMax, sheetWebAppUrl,
+      brandDescription, brandValues, brandLinks, postTone, useEmoji, includeBrandText, defaultHashtags,
+      templates]);
 
   const activeOrModel  = orCustom.trim() || orModel;
   const selectedObj    = OBJECTIVES.find(o => o.id === objective);
@@ -144,16 +221,46 @@ export default function EcoBitesHub() {
     return d.candidates[0].content.parts[0].text;
   };
 
-  const callOpenRouter = async (prompt) => {
+  const callOpenRouter = async (prompt, retryCount = 0) => {
     if (!orKey) throw new Error("Lipsă cheie OpenRouter — adaugă în ⚙️ Setări");
-    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method:"POST",
-      headers:{"Content-Type":"application/json","Authorization":`Bearer ${orKey}`,"HTTP-Referer":"https://ecobites.ro","X-Title":"EcoBites Hub"},
-      body: JSON.stringify({ model:activeOrModel, messages:[{role:"user",content:prompt}], max_tokens:2048 }),
-    });
-    const d = await res.json();
-    if (d.error) throw new Error(d.error.message || "Eroare OpenRouter");
-    return d.choices[0].message.content;
+    let modelToUse = activeOrModel;
+    if (activeFreeModels.length > 0 && !activeFreeModels.includes(modelToUse) && !orCustom) {
+      modelToUse = activeFreeModels[0];
+      console.log(`Fallback: folosesc modelul activ ${modelToUse}`);
+    }
+    try {
+      const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${orKey}`,
+          "HTTP-Referer": "https://ecobites.ro",
+          "X-Title": "EcoBites Hub"
+        },
+        body: JSON.stringify({ model: modelToUse, messages: [{ role: "user", content: prompt }], max_tokens: 2048 }),
+      });
+      const d = await res.json();
+      if (d.error) {
+        if (retryCount < activeFreeModels.length && !orCustom) {
+          const nextModel = activeFreeModels[retryCount + 1];
+          if (nextModel) {
+            console.log(`Model ${modelToUse} a eșuat: ${d.error.message}. Încerc ${nextModel}`);
+            return callOpenRouter(prompt, retryCount + 1);
+          }
+        }
+        throw new Error(d.error.message || "Eroare OpenRouter");
+      }
+      return d.choices[0].message.content;
+    } catch (err) {
+      if (retryCount < activeFreeModels.length && !orCustom) {
+        const nextModel = activeFreeModels[retryCount + 1];
+        if (nextModel) {
+          console.log(`Eroare cu ${modelToUse}, fallback la ${nextModel}`);
+          return callOpenRouter(prompt, retryCount + 1);
+        }
+      }
+      throw err;
+    }
   };
 
   const callHF = async (prompt) => {
@@ -188,7 +295,38 @@ export default function EcoBitesHub() {
     return JSON.parse(jsonStr);
   };
 
-  // ── Catalog sync ─────────────────────────────────────────────────────
+  const buildPromptWithBrand = (basePrompt) => {
+    let brandContext = "";
+    if (includeBrandText) {
+      brandContext = `Despre brand: ${brandDescription}. Valori: ${brandValues}. Link-uri utile: ${brandLinks}\n`;
+    }
+    const toneContext = `Scrie într-un ton ${postTone}. ${useEmoji ? "Adaugă 3-4 emoji-uri potrivite." : "Nu folosi emoji-uri."}\n`;
+    const hashtagContext = `La finalul postării pentru Instagram, adaugă aceste hashtag-uri: ${defaultHashtags}\n`;
+    return brandContext + toneContext + hashtagContext + basePrompt;
+  };
+
+  // Google Trends fetch
+  const fetchGoogleTrends = async () => {
+    setLoading(true);
+    setLoadMsg("Încarc tendințele Google...");
+    try {
+      const res = await fetch(`/api/proxy-trends?geo=RO&hl=ro&tz=-60`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const trendsList = data.default?.trendingSearchesDays?.[0]?.trendingSearches || [];
+      const keywords = trendsList.map(t => t.title?.query).filter(Boolean);
+      setGoogleTrends(keywords);
+      alert(`✅ Încărcate ${keywords.length} tendințe Google pentru România.`);
+    } catch (err) {
+      console.error(err);
+      alert("Eroare la încărcarea tendințelor Google: " + err.message);
+    } finally {
+      setLoading(false);
+      setLoadMsg("");
+    }
+  };
+
+  // Catalog sync
   const syncCatalog = async (force = false) => {
     if (!feedUrl) { alert("Adaugă URL-ul CSV în ⚙️ Setări"); return; }
     const today = new Date().toISOString().slice(0,10);
@@ -197,25 +335,29 @@ export default function EcoBitesHub() {
     try {
       let finalUrl = feedUrl;
       const isGoogleDrive = feedUrl.includes('drive.google.com') || feedUrl.includes('googleusercontent.com');
-      if (isGoogleDrive) {
-        finalUrl = `/api/proxy-csv?url=${encodeURIComponent(feedUrl)}`;
-      }
+      if (isGoogleDrive) finalUrl = `/api/proxy-csv?url=${encodeURIComponent(feedUrl)}`;
       const res = await fetch(finalUrl);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const text = await res.text();
       const parsed = text.split("\n").slice(1).map(row => {
-        const cols = row.match(/"([^"]*)"|([^,]+)/g)?.map(c => c.replace(/^"|"$/g,"").trim()) || [];
-        if (cols.length < 4) return null;
-        return { name:cols[0], price:cols[1], stoc:cols[2], link:cols[3], img:cols[4]||"", desc:cols[5]||"" };
-      }).filter(p => p?.name);
-      setCatalog(parsed); setCatalogDate(today);
-      lsSet("eb_catalog", parsed);
+        const cols = row.match(/(".*?"|[^,]+)(?=\s*,|\s*$)/g)?.map(c => c.replace(/^"|"$/g,"").trim()) || [];
+        if (cols.length < 8) return null;
+        const name = cols[0];
+        const price = parseFloat(cols[5].replace(',', '.'));
+        if (isNaN(price) || price <= 0) return null;
+        const link = cols[7];
+        const img = cols[6];
+        const desc = (cols[3] + " " + cols[4]).trim();
+        return { name, price, stoc: "instock", link, img, desc };
+      }).filter(p => p && p.name);
+      const filtered = parsed.filter(p => p.price >= priceMin && p.price <= priceMax);
+      setCatalog(filtered); setCatalogDate(today);
+      lsSet("eb_catalog", filtered);
       localStorage.setItem("eb_catalog_date", today);
     } catch (e) { alert("Eroare sync: " + e.message); }
     setLoading(false); setLoadMsg("");
   };
 
-  // ── Manual CSV upload ────────────────────────────────────────────────
   const handleManualUpload = (event) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -226,23 +368,23 @@ export default function EcoBitesHub() {
       try {
         const text = e.target.result;
         const parsed = text.split("\n").slice(1).map(row => {
-          const cols = row.match(/"([^"]*)"|([^,]+)/g)?.map(c => c.replace(/^"|"$/g, "").trim()) || [];
-          if (cols.length < 4) return null;
-          return {
-            name: cols[0],
-            price: cols[1],
-            stoc: cols[2],
-            link: cols[3],
-            img: cols[4] || "",
-            desc: cols[5] || ""
-          };
-        }).filter(p => p?.name);
+          const cols = row.match(/(".*?"|[^,]+)(?=\s*,|\s*$)/g)?.map(c => c.replace(/^"|"$/g, "").trim()) || [];
+          if (cols.length < 8) return null;
+          const name = cols[0];
+          const price = parseFloat(cols[5].replace(',', '.'));
+          if (isNaN(price) || price <= 0) return null;
+          const link = cols[7];
+          const img = cols[6];
+          const desc = (cols[3] + " " + cols[4]).trim();
+          return { name, price, stoc: "instock", link, img, desc };
+        }).filter(p => p && p.name);
+        const filtered = parsed.filter(p => p.price >= priceMin && p.price <= priceMax);
         const today = new Date().toISOString().slice(0, 10);
-        setCatalog(parsed);
+        setCatalog(filtered);
         setCatalogDate(today);
-        lsSet("eb_catalog", parsed);
+        lsSet("eb_catalog", filtered);
         localStorage.setItem("eb_catalog_date", today);
-        alert(`✅ Catalog încărcat cu succes: ${parsed.length} produse`);
+        alert(`✅ Catalog încărcat cu succes: ${filtered.length} produse`);
       } catch (err) {
         alert("Eroare la parsarea fișierului CSV: " + err.message);
       } finally {
@@ -258,55 +400,112 @@ export default function EcoBitesHub() {
     reader.readAsText(file, "UTF-8");
   };
 
-  // ── Daily trends ─────────────────────────────────────────────────────
+  // Generate trends
   const generateTrends = async (force = false) => {
     if (!catalog.length) { alert("Sincronizează catalogul mai întâi (tab 📂 Sync)"); return; }
     const today = new Date().toISOString().slice(0,10);
     if (!force && trendsDate === today && trends) return;
-    
     await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    setLoading(true); setLoadMsg("Analizez catalogul — top 15 produse pentru azi...");
+    setLoading(true); setLoadMsg("Analizez catalogul — top 30 produse pentru azi...");
+    ReactGA.event({ category: "AI", action: "generate_trends", label: force ? "forced" : "normal" });
     try {
-      const month  = new Date().toLocaleString("ro-RO", {month:"long"});
-      const sample = catalog.slice(0,20).map(p=>`${p.name} | ${p.price} RON | ${p.desc.substring(0,110)}`).join("\n");
-      const prompt = `IMPORTANT: Răspunde EXCLUSIV cu JSON valid, fără text înainte sau după. Începe direct cu { și termină cu }.
+      const month = new Date().toLocaleString("ro-RO", {month:"long"});
+      let trendsContext = "";
+      if (useGoogleTrends && googleTrends && googleTrends.length) {
+        trendsContext = `\n\nTendințe Google în România astăzi (${today}):\n${googleTrends.slice(0,10).join(", ")}\n\nFolosește aceste subiecte populare pentru a selecta produsele relevante.`;
+      }
+      const sample = catalog.slice(0,30).map(p=>`${p.name} | ${p.price} RON | ${p.desc.substring(0,110)}`).join("\n");
+      const basePrompt = `IMPORTANT: Răspunde EXCLUSIV cu JSON valid, fără text înainte sau după. Începe direct cu { și termină cu }.
 
-Ești expert marketing și SEO pentru produse naturiste în România.
-Luna curentă: ${month}. Analizează catalogul și selectează EXACT 15 produse cu cel mai mare potențial de vânzare acum, bazat pe sezonalitate, beneficii, și cerere tipică pentru ${month} în România.
+Ești un copywriter profesionist pentru social media, specializat în produse naturiste în România.
+Luna curentă: ${month}.${trendsContext}
+Analizează catalogul și selectează EXACT 30 produse cu cel mai mare potențial de vânzare acum, bazat pe sezonalitate, beneficii și tendințele actuale.
 
-Pentru fiecare produs oferă:
+Pentru fiecare produs, oferă:
 - nume: exact cum apare în catalog
-- motiv: de ce e potrivit acum (max 70 caractere)  
-- idei: exact 4 hooks pentru postări social media bazate pe descrierea produsului (max 65 caractere fiecare)
+- motiv: de ce e potrivit acum (max 80 caractere)
+- idei: exact 4 idei de postări scurte (hooks) pentru social media (max 65 caractere fiecare)
+- facebook_post: text pentru postare pe Facebook (180-280 caractere) care include:
+  * un hook atrăgător
+  * 2-3 beneficii cheie
+  * prețul produsului (în RON)
+  * un CTA clar gen "👉 Comandă acum"
+  * 3-4 emoji-uri relevante, ton cald și prietenos
+- instagram_caption: text pentru caption pe Instagram (max 220 caractere) care include:
+  * hook scurt
+  * 2 beneficii
+  * prețul
+  * mențiunea "🔗 Link în bio"
+  * 5-7 hashtag-uri relevante: #naturist #bio #romania #produseNaturale #wellness #sănătate #primăvară
+  * emoji-uri prietenoase
 
-Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
-{"recomandari":[{"nume":"...","motiv":"...","idei":["...","...","...","..."]}]}
+Răspunde DOAR cu JSON în acest format:
+{
+  "recomandari": [
+    {
+      "nume": "...",
+      "motiv": "...",
+      "idei": ["...", "...", "...", "..."],
+      "facebook_post": "...",
+      "instagram_caption": "..."
+    }
+  ]
+}
 
 Catalog (nume | preț | descriere):
 ${sample}`;
-      const result = await callAIJson(prompt);
+      const fullPrompt = buildPromptWithBrand(basePrompt);
+      const result = await callAIJson(fullPrompt);
       if (result?.recomandari) {
         setTrends(result.recomandari); setTrendsDate(today);
         lsSet("eb_trends", result.recomandari);
         localStorage.setItem("eb_trends_date", today);
+        const newHistory = [{ date: today, trends: result.recomandari }, ...trendHistory.filter(h => h.date !== today)].slice(0,30);
+        setTrendHistory(newHistory);
+        localStorage.setItem("eb_trends_history", JSON.stringify(newHistory));
+        ReactGA.event({ category: "AI", action: "trends_generated", value: result.recomandari.length });
       }
-    } catch (e) { 
-      console.error("Eroare trends detaliată:", e);
-      alert("Eroare trends: " + (e.message || e.toString())); 
+    } catch (e) {
+      console.error(e);
+      alert("Eroare trends: " + (e.message || e.toString()));
+      ReactGA.event({ category: "AI", action: "trends_error", label: e.message });
     }
     setLoading(false); setLoadMsg("");
   };
 
-  // ── Ad copy ──────────────────────────────────────────────────────────
+  // Generate hashtags with AI
+  const generateHashtags = async (productName, productDesc) => {
+    setLoading(true);
+    setLoadMsg("Generez hashtag-uri relevante...");
+    try {
+      const month = new Date().toLocaleString("ro-RO", {month:"long"});
+      let trendsContext = "";
+      if (googleTrends && googleTrends.length) {
+        trendsContext = `Tendințe Google actuale: ${googleTrends.slice(0,5).join(", ")}. `;
+      }
+      const prompt = `Generează exact 10 hashtag-uri relevante pentru produsul "${productName}" (descriere: ${productDesc}). Sezon: ${month}. ${trendsContext}Hashtag-urile trebuie să fie în limba română sau engleză, fără diacritice, cu # în față, separate prin spațiu. Răspunde DOAR cu hashtag-urile, pe o singură linie.`;
+      const result = await callAI(prompt);
+      const hashtags = result.split(" ").filter(t => t.startsWith("#")).slice(0,10).join(" ");
+      alert(`✅ Hashtag-uri sugerate:\n${hashtags}`);
+      navigator.clipboard.writeText(hashtags);
+    } catch (err) {
+      alert("Eroare la generare hashtag-uri: " + err.message);
+    } finally {
+      setLoading(false);
+      setLoadMsg("");
+    }
+  };
+
+  // Ad copy
   const generateAdCopy = async () => {
     const p = adProd;
     if (!p.name) { alert("Completează detaliile produsului (Pasul 2)"); return; }
     setLoading(true); setLoadMsg("Generez texte reclame...");
     setAdCopy(a => ({...a, error:null}));
+    ReactGA.event({ category: "AI", action: "generate_ad_copy", label: p.name });
     try {
       const objLabel = selectedObj?.label || "Trafic";
-      const prompt = `Ești copywriter expert Meta Ads pentru piața din România. Generează 3 variante distincte de ad copy pentru Facebook/Instagram în română.
+      const basePrompt = `Ești copywriter expert Meta Ads pentru piața din România. Generează 3 variante distincte de ad copy pentru Facebook/Instagram în română.
 
 Produs: ${p.name}
 Preț: ${p.price} RON
@@ -321,7 +520,8 @@ Reguli stricte:
 
 Răspunde EXCLUSIV în JSON valid, fără text suplimentar:
 {"variants":[{"headline":"...","primary_text":"...","cta":"..."},{"headline":"...","primary_text":"...","cta":"..."},{"headline":"...","primary_text":"...","cta":"..."}]}`;
-      const result = await callAIJson(prompt);
+      const fullPrompt = buildPromptWithBrand(basePrompt);
+      const result = await callAIJson(fullPrompt);
       setAdCopy({ variants:result.variants, selected:0, error:null });
     } catch (e) {
       setAdCopy(a => ({...a, error: e.message}));
@@ -329,30 +529,33 @@ Răspunde EXCLUSIV în JSON valid, fără text suplimentar:
     setLoading(false); setLoadMsg("");
   };
 
-  // ── Newsletter ────────────────────────────────────────────────────────
+  // Newsletter
   const generateNewsletter = async (count = 2) => {
     if (!selProd) { alert("Selectează un produs din Trends sau catalog"); return; }
     setLoading(true); setLoadMsg(`Generez ${count} variante newsletter...`);
+    ReactGA.event({ category: "AI", action: "generate_newsletter", label: selProd.name, value: count });
     try {
-      const prompt = `Generează ${count} variante diferite de newsletter în română pentru produsul "${selProd.name}" (${selProd.price} RON).
+      const basePrompt = `Generează ${count} variante diferite de newsletter în română pentru produsul "${selProd.name}" (${selProd.price} RON).
 Descriere: ${selProd.desc}
 Link produs: ${selProd.link}
 
 Fiecare variantă: subiect cu emoji (max 50 caractere), pre-header (max 40 caractere), corp email (max 300 caractere, include 2-3 beneficii și link), CTA clar.
 
 Răspunde EXCLUSIV în JSON: {"variante":[{"subiect":"...","pre_header":"...","corp":"...","cta":"..."}]}`;
-      const result = await callAIJson(prompt);
+      const fullPrompt = buildPromptWithBrand(basePrompt);
+      const result = await callAIJson(fullPrompt);
       setNewsletterOut(result.variante || []);
     } catch (e) { alert("Eroare newsletter: " + e.message); }
     setLoading(false); setLoadMsg("");
   };
 
-  // ── Carousel / Video ─────────────────────────────────────────────────
+  // Carousel
   const generateCarousel = async () => {
     if (!selProd) { alert("Selectează un produs"); return; }
     setLoading(true); setLoadMsg("Generez carusel și script video...");
+    ReactGA.event({ category: "AI", action: "generate_carousel", label: selProd.name });
     try {
-      const prompt = `Ești creator de conținut social media în România pentru produse naturiste. Creează pentru produsul "${selProd.name}" (${selProd.price} RON):
+      const basePrompt = `Ești creator de conținut social media în România pentru produse naturiste. Creează pentru produsul "${selProd.name}" (${selProd.price} RON):
 
 CARUSEL INSTAGRAM (5 slide-uri):
 Slide 1: Hook puternic care oprește scroll-ul (max 55 caractere)
@@ -369,18 +572,20 @@ CTA 12-15s (max 35 caractere):
 Descriere produs: ${selProd.desc}
 
 Marchează clar secțiunile cu CARUSEL: și VIDEO:`;
-      const result = await callAI(prompt);
+      const fullPrompt = buildPromptWithBrand(basePrompt);
+      const result = await callAI(fullPrompt);
       setCarouselOut(result);
     } catch (e) { alert("Eroare: " + e.message); }
     setLoading(false); setLoadMsg("");
   };
 
-  // ── Blog Gomag ───────────────────────────────────────────────────────
+  // Blog
   const generateBlog = async () => {
     if (!selProd) { alert("Selectează un produs"); return; }
     setLoading(true); setLoadMsg("Generez articol blog SEO pentru Gomag...");
+    ReactGA.event({ category: "AI", action: "generate_blog", label: selProd.name });
     try {
-      const prompt = `Ești expert SEO pentru platforma Gomag. Scrie un articol de blog complet în română pentru "${selProd.name}".
+      const basePrompt = `Ești expert SEO pentru platforma Gomag. Scrie un articol de blog complet în română pentru "${selProd.name}".
 
 Date produs: Preț ${selProd.price} RON | Link: ${selProd.link} | Descriere: ${selProd.desc}
 
@@ -394,12 +599,14 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
   "tags": "tag1, tag2, tag3, tag4, tag5",
   "link_produs": "${selProd.link}"
 }`;
-      const result = await callAIJson(prompt);
+      const fullPrompt = buildPromptWithBrand(basePrompt);
+      const result = await callAIJson(fullPrompt);
       setBlogOut(result);
     } catch (e) { alert("Eroare blog: " + e.message); }
     setLoading(false); setLoadMsg("");
   };
 
+  // Tutorial
   const adTutorial = () => {
     const iList = targeting.interests.length ? targeting.interests.slice(0,5).join(", ") : "produse naturale, alimentație bio, sănătate & wellness";
     const gLabel = {all:"Toate genurile",female:"Femei",male:"Bărbați"}[targeting.gender];
@@ -427,8 +634,70 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
     ];
   };
 
-  // ── UI helpers ───────────────────────────────────────────────────────
+  // OpenRouter model testing
+  const testOpenRouterModels = async () => {
+    if (!orKey) { alert("Adaugă cheia OpenRouter în setări înainte de test."); return; }
+    setTestingModels(true);
+    const results = {};
+    const active = [];
+    const freeModels = OR_MODELS.filter(m => m.tag === "FREE");
+    for (const model of freeModels) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${orKey}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ model: model.id, messages: [{ role: "user", content: "ok" }], max_tokens: 5 }),
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        if (res.ok) {
+          results[model.id] = "✅ accesibil";
+          active.push(model.id);
+        } else {
+          const data = await res.json().catch(() => ({}));
+          results[model.id] = `❌ ${data.error?.message || `HTTP ${res.status}`}`;
+        }
+      } catch (err) {
+        results[model.id] = `⚠️ ${err.message}`;
+      }
+      await new Promise(r => setTimeout(r, 500));
+    }
+    setModelTestResults(results);
+    setActiveFreeModels(active);
+    localStorage.setItem("eb_active_free_models", JSON.stringify(active));
+    setTestingModels(false);
+    if (active.length > 0 && !active.includes(orModel) && !orCustom) setOrModel(active[0]);
+  };
+
+  // Buffer post (draft)
+  const postToBuffer = async (text) => {
+    if (!text) { alert("Nu există text de postat."); return; }
+    ReactGA.event({ category: "Buffer", action: "post_draft", label: text.substring(0, 50) });
+    try {
+      const res = await fetch('/api/buffer-post', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert('✅ Postare salvată ca draft în Buffer!');
+        ReactGA.event({ category: "Buffer", action: "post_success" });
+      } else {
+        alert('❌ Eroare Buffer: ' + data.error);
+        ReactGA.event({ category: "Buffer", action: "post_error", label: data.error });
+      }
+    } catch (err) {
+      alert('Eroare de rețea: ' + err.message);
+      ReactGA.event({ category: "Buffer", action: "post_network_error" });
+    }
+  };
+
+  // UI helpers
   const copyText = (text, id) => {
+    ReactGA.event({ category: "User", action: "copy", label: id });
     navigator.clipboard.writeText(text).then(() => { setCopied(id); setTimeout(() => setCopied(null), 2100); });
   };
   const CopyBtn = ({ text, id, style }) => (
@@ -460,7 +729,7 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
     </div>
   ) : null;
 
-  // ── CSS ───────────────────────────────────────────────────────────────
+  // CSS
   const css = `
     @import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..60,600;12..60,700&family=DM+Sans:wght@300;400;500&display=swap');
     *{box-sizing:border-box;margin:0;padding:0;}
@@ -499,8 +768,6 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
           <h3 style={{ fontFamily:"'Bricolage Grotesque'", fontSize:18 }}>⚙️ Setări API & Conexiuni</h3>
           <button className="icon-btn" onClick={() => setShowSettings(false)}>✕</button>
         </div>
-
-        {/* Provider selector */}
         <div style={{ marginBottom:22 }}>
           <div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:.5, marginBottom:10 }}>Provider AI</div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
@@ -518,8 +785,6 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
             ))}
           </div>
         </div>
-
-        {/* Provider-specific fields */}
         <div style={{ display:"flex", flexDirection:"column", gap:14, marginBottom:22 }}>
           {provider === "gemini" && (
             <>
@@ -537,16 +802,13 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
               </div>
             </>
           )}
-
           {provider === "openrouter" && (
             <>
               <div>
                 <label style={{ fontSize:12, color:C.muted, display:"block", marginBottom:6 }}>OpenRouter API Key</label>
                 <div style={{ position:"relative" }}>
                   <input className="field" type={keysVisible?"text":"password"} placeholder="sk-or-v1-..." value={orKey} onChange={e=>setOrKey(e.target.value)} style={{ paddingRight:44 }} />
-                  <button onClick={() => setKeysVisible(v=>!v)} style={{ position:"absolute", right:12, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", color:C.muted, cursor:"pointer", fontSize:14 }}>
-                    {keysVisible?"🙈":"👁️"}
-                  </button>
+                  <button onClick={() => setKeysVisible(v=>!v)} style={{ position:"absolute", right:12, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", color:C.muted, cursor:"pointer", fontSize:14 }}>{keysVisible?"🙈":"👁️"}</button>
                 </div>
                 <a href="https://openrouter.ai/keys" target="_blank" rel="noreferrer" style={{ fontSize:11, color:C.accent, display:"block", marginTop:5 }}>→ openrouter.ai/keys</a>
               </div>
@@ -563,9 +825,28 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
                 </div>
                 <input className="field" placeholder="Custom model ID: org/model-name (suprascrie lista)" value={orCustom} onChange={e=>setOrCustom(e.target.value)} style={{ fontSize:12 }} />
               </div>
+              <div style={{ marginTop: 16 }}>
+                <button className="btn-s btn-sm" onClick={testOpenRouterModels} disabled={testingModels || !orKey}>
+                  {testingModels ? "🔄 Testez modele..." : "🔍 Verifică modele active"}
+                </button>
+                {Object.keys(modelTestResults).length > 0 && (
+                  <div style={{ marginTop: 12, maxHeight: 200, overflowY: "auto", fontSize: 11, background: "#0a0a1a", padding: 8, borderRadius: 8 }}>
+                    {Object.entries(modelTestResults).map(([modelId, status]) => (
+                      <div key={modelId} style={{ padding: "2px 0", fontFamily: "monospace" }}>
+                        <span style={{ color: status.includes("✅") ? "#4ade80" : status.includes("❌") ? "#f87171" : "#fbbf24" }}>{status}</span>
+                        <span style={{ color: C.muted, marginLeft: 8 }}>{modelId.split("/").pop()}</span>
+                      </div>
+                    ))}
+                    {activeFreeModels.length > 0 && (
+                      <div style={{ marginTop: 8, paddingTop: 6, borderTop: `1px solid ${C.border}`, color: C.accent }}>
+                        ✅ Modele active ({activeFreeModels.length}): {activeFreeModels.map(m => m.split("/").pop()).join(", ")}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </>
           )}
-
           {provider === "huggingface" && (
             <>
               <div>
@@ -579,22 +860,76 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
               </div>
             </>
           )}
-
-          {/* Feed URL */}
           <div>
             <label style={{ fontSize:12, color:C.muted, display:"block", marginBottom:6 }}>🔗 URL CSV Feed (Google Drive)</label>
             <input className="field" placeholder="https://drive.google.com/uc?export=download&id=..." value={feedUrl} onChange={e=>setFeedUrl(e.target.value)} />
-            <div style={{ fontSize:11, color:C.muted, marginTop:5 }}>Link-ul direct de download al fișierului ecobites_ai_feed.csv generat de scriptul tău din Drive</div>
+            <div style={{ fontSize:11, color:C.muted, marginTop:5 }}>Link-ul direct de download al fișierului CSV generat de scriptul tău din Drive</div>
           </div>
-
-          {/* Buffer */}
+          <div>
+            <label style={{ fontSize:12, color:C.muted, display:"block", marginBottom:6 }}>💰 Filtru preț (RON)</label>
+            <div style={{ display:"flex", gap:8 }}>
+              <input className="field" type="number" placeholder="Min" value={priceMin} onChange={e=>setPriceMin(Number(e.target.value))} style={{ width:"50%" }} />
+              <input className="field" type="number" placeholder="Max" value={priceMax} onChange={e=>setPriceMax(Number(e.target.value))} style={{ width:"50%" }} />
+            </div>
+            <div style={{ fontSize:11, color:C.muted, marginTop:5 }}>Produsele cu preț 0 sunt excluse automat.</div>
+          </div>
           <div>
             <label style={{ fontSize:12, color:C.muted, display:"block", marginBottom:6 }}>📤 Buffer Access Token</label>
             <input className="field" type={keysVisible?"text":"password"} placeholder="1/xyz..." value={bufferKey} onChange={e=>setBufferKey(e.target.value)} />
             <div style={{ fontSize:11, color:C.muted, marginTop:5 }}>Din buffer.com → Settings → Apps → Access Token</div>
           </div>
+          <div>
+            <label style={{ fontSize:12, color:C.muted, display:"block", marginBottom:6 }}>📊 Google Sheets Web App URL</label>
+            <input className="field" placeholder="https://script.google.com/macros/s/.../exec" value={sheetWebAppUrl} onChange={e=>setSheetWebAppUrl(e.target.value)} />
+            <div style={{ fontSize:11, color:C.muted, marginTop:5 }}>Pentru a salva postările selectate. Creează un Apps Script în sheet-ul tău și deployează ca Web App.</div>
+          </div>
+          {/* Brand Settings inline */}
+          <div className="card" style={{ marginTop: 8 }}>
+            <h4 style={{ marginBottom: 12 }}>🏷️ Setări brand & ton</h4>
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ display: "block", fontSize: 12, marginBottom: 4 }}>Tonul postărilor</label>
+              <select className="field" value={postTone} onChange={e => setPostTone(e.target.value)}>
+                <option value="prietenos">Prietenos</option><option value="profesionist">Profesionist</option>
+                <option value="energic">Energic</option><option value="relaxat">Relaxat</option><option value="informativ">Informativ</option>
+              </select>
+            </div>
+            <div style={{ marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
+              <input type="checkbox" checked={useEmoji} onChange={e => setUseEmoji(e.target.checked)} />
+              <span>Folosește emoji-uri în postări</span>
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ display: "block", fontSize: 12, marginBottom: 4 }}>Descriere brand (Despre EcoBites)</label>
+              <textarea className="field" rows={2} value={brandDescription} onChange={e => setBrandDescription(e.target.value)} />
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ display: "block", fontSize: 12, marginBottom: 4 }}>Valori / Beneficii generale</label>
+              <textarea className="field" rows={2} value={brandValues} onChange={e => setBrandValues(e.target.value)} />
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ display: "block", fontSize: 12, marginBottom: 4 }}>Link-uri utile (separate prin virgulă)</label>
+              <input className="field" value={brandLinks} onChange={e => setBrandLinks(e.target.value)} />
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ display: "block", fontSize: 12, marginBottom: 4 }}>Hashtag-uri implicite</label>
+              <input className="field" value={defaultHashtags} onChange={e => setDefaultHashtags(e.target.value)} />
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+              <input type="checkbox" checked={includeBrandText} onChange={e => setIncludeBrandText(e.target.checked)} />
+              <span>Include textul brandului în postări</span>
+            </div>
+          </div>
+          {/* Template Editor inline */}
+          <div className="card" style={{ marginTop: 8 }}>
+            <h4 style={{ marginBottom: 12 }}>📝 Șabloane personalizate</h4>
+            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+              <button className={`chip ${templates.facebook !== undefined ? "on" : ""}`} onClick={() => {}}>Facebook</button>
+              <button className={`chip ${templates.instagram !== undefined ? "on" : ""}`} onClick={() => {}}>Instagram</button>
+            </div>
+            <textarea className="field" rows={4} value={templates.facebook || ""} onChange={e => setTemplates({...templates, facebook: e.target.value})} placeholder="Șablon Facebook" style={{ marginBottom: 8 }} />
+            <textarea className="field" rows={4} value={templates.instagram || ""} onChange={e => setTemplates({...templates, instagram: e.target.value})} placeholder="Șablon Instagram" />
+            <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>Variabile: {`{nume}, {pret}, {link}, {descriere}, {emoji}, {despre_brand}, {hashtaguri}`}</div>
+          </div>
         </div>
-
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
           <button className="btn-s btn-sm" onClick={() => setKeysVisible(v=>!v)}>{keysVisible?"🙈 Ascunde":"👁️ Arată"} cheile</button>
           <button className="btn-p" onClick={() => setShowSettings(false)}>✓ Salvează</button>
@@ -608,18 +943,14 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
     <div style={{ fontFamily:"'DM Sans','Segoe UI',sans-serif", background:C.bg, minHeight:"100vh", color:C.text, padding:"24px 16px" }}>
       <style>{css}</style>
       {showSettings && <SettingsModal />}
-
-      {/* Loading overlay */}
       {loading && (
         <div style={{ position:"fixed", inset:0, background:"rgba(7,7,15,.88)", backdropFilter:"blur(4px)", zIndex:300, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:16 }}>
           <div className="spinner" />
           <div style={{ color:C.accent, fontSize:14, fontWeight:500 }}>{loadMsg}</div>
         </div>
       )}
-
       <div style={{ maxWidth:860, margin:"0 auto" }}>
-
-        {/* ── HEADER ── */}
+        {/* HEADER */}
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:26 }}>
           <div>
             <h1 style={{ fontFamily:"'Bricolage Grotesque'", fontSize:22, fontWeight:700, background:`linear-gradient(135deg,${C.accent},#93c5fd)`, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", marginBottom:3 }}>
@@ -633,7 +964,7 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
           <button className="icon-btn" onClick={() => setShowSettings(true)}>⚙️ Setări</button>
         </div>
 
-        {/* ── TABS ── */}
+        {/* TABS */}
         <div style={{ display:"flex", gap:6, marginBottom:26, overflowX:"auto", paddingBottom:4 }}>
           {TABS.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
@@ -643,9 +974,7 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
           ))}
         </div>
 
-        {/* ══════════════════════════════════════════════════
-            TAB: SYNC
-        ══════════════════════════════════════════════════ */}
+        {/* TAB: SYNC */}
         {tab === "sync" && (
           <div className="card" style={{ textAlign: "center", padding: "44px 24px" }}>
             <div style={{ fontSize: 44, marginBottom: 16 }}>📂</div>
@@ -654,63 +983,26 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
               Importă produsele din CSV-ul generat de scriptul tău Google Sheets.<br/>
               Poți folosi fie link-ul public de pe Drive, fie încărca fișierul direct.
             </p>
-
-            {catalogDate && (
-              <div style={{ color: C.muted, fontSize: 12, marginBottom: 20 }}>
-                Ultima sincronizare: <strong style={{ color: C.accent }}>{catalogDate}</strong>
-              </div>
-            )}
-
+            {catalogDate && <div style={{ color: C.muted, fontSize: 12, marginBottom: 20 }}>Ultima sincronizare: <strong style={{ color: C.accent }}>{catalogDate}</strong></div>}
             <div style={{ marginBottom: 32 }}>
               <div style={{ fontWeight: 600, marginBottom: 8, color: C.sub }}>🔗 Sincronizare automată (URL)</div>
               <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
                 <button className="btn-p" onClick={() => syncCatalog(true)}>🔄 Sincronizează din URL</button>
-                {catalog.length > 0 && (
-                  <button className="btn-s" onClick={() => setTab("trends")}>Mergi la Trends →</button>
-                )}
+                {catalog.length > 0 && <button className="btn-s" onClick={() => setTab("trends")}>Mergi la Trends →</button>}
               </div>
-              <div style={{ fontSize: 12, color: C.muted, marginTop: 8 }}>
-                URL-ul se configurează în <strong>⚙️ Setări</strong> – folosește link-ul direct de descărcare:<br/>
-                <code style={{ background: "#0a0a1a", padding: "2px 6px", borderRadius: 6 }}>https://drive.google.com/uc?export=download&id=ID_FISIER</code>
-              </div>
+              <div style={{ fontSize: 12, color: C.muted, marginTop: 8 }}>URL-ul se configurează în <strong>⚙️ Setări</strong> – folosește link-ul direct de descărcare:<br/><code style={{ background: "#0a0a1a", padding: "2px 6px", borderRadius: 6 }}>https://drive.google.com/uc?export=download&id=ID_FISIER</code></div>
             </div>
-
             <div style={{ borderTop: `1px solid ${C.border}`, margin: "16px auto", width: "80%" }} />
-
             <div>
               <div style={{ fontWeight: 600, marginBottom: 8, color: C.sub }}>📁 Încărcare manuală (CSV)</div>
-              <input
-                type="file"
-                accept=".csv"
-                onChange={handleManualUpload}
-                style={{ display: "none" }}
-                id="csv-upload-input"
-              />
-              <label
-                htmlFor="csv-upload-input"
-                style={{
-                  display: "inline-block",
-                  background: C.accentDim,
-                  border: `1px solid ${C.accentBorder}`,
-                  padding: "10px 22px",
-                  borderRadius: 9,
-                  cursor: "pointer",
-                  fontSize: 14,
-                  fontWeight: 600,
-                  color: C.accent,
-                  transition: "all 0.2s"
-                }}
+              <input type="file" accept=".csv" onChange={handleManualUpload} style={{ display: "none" }} id="csv-upload-input" />
+              <label htmlFor="csv-upload-input" style={{ display: "inline-block", background: C.accentDim, border: `1px solid ${C.accentBorder}`, padding: "10px 22px", borderRadius: 9, cursor: "pointer", fontSize: 14, fontWeight: 600, color: C.accent, transition: "all 0.2s" }}
                 onMouseEnter={e => e.currentTarget.style.background = "rgba(110,231,183,0.2)"}
-                onMouseLeave={e => e.currentTarget.style.background = C.accentDim}
-              >
+                onMouseLeave={e => e.currentTarget.style.background = C.accentDim}>
                 📂 Alege fișier CSV
               </label>
-              <div style={{ fontSize: 12, color: C.muted, marginTop: 10 }}>
-                Fișierul trebuie să aibă coloanele: <strong>nume, preț, stoc, link, imagine, descriere</strong><br/>
-                (separator virgulă, suportă ghilimele duble)
-              </div>
+              <div style={{ fontSize: 12, color: C.muted, marginTop: 10 }}>Fișierul trebuie să aibă coloanele: <strong>Denumire, Greutate, Marca, Descriere F, Descriere S, Pret, Imagine, Url</strong><br/>(separator virgulă, suportă ghilimele duble)</div>
             </div>
-
             {catalog.length > 0 && (
               <div style={{ marginTop: 32, display: "inline-flex", gap: 20, padding: "14px 24px", background: C.accentDim, border: `1px solid ${C.accentBorder}`, borderRadius: 12 }}>
                 <span><strong style={{ color: C.accent }}>{catalog.length}</strong> <span style={{ color: C.muted, fontSize: 13 }}>produse totale</span></span>
@@ -721,75 +1013,84 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
           </div>
         )}
 
-        {/* ══════════════════════════════════════════════════
-            TAB: TRENDS
-        ══════════════════════════════════════════════════ */}
+        {/* TAB: TRENDS */}
         {tab === "trends" && (
           <div>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20, flexWrap:"wrap", gap:12 }}>
-              <div>
-                <h2 style={{ fontFamily:"'Bricolage Grotesque'", fontSize:19, marginBottom:4 }}>🔥 Top 15 Produse pentru Azi</h2>
-                <p style={{ color:C.muted, fontSize:13 }}>
-                  Analiză bazată pe sezonalitate · {catalog.length} produse în catalog
-                  {trendsDate===new Date().toISOString().slice(0,10) && <span style={{ color:C.accent, marginLeft:8 }}>✓ actualizat azi</span>}
-                </p>
-              </div>
-              <div style={{ display:"flex", gap:8 }}>
+              <div><h2 style={{ fontFamily:"'Bricolage Grotesque'", fontSize:19, marginBottom:4 }}>🔥 Top 30 Produse pentru Azi</h2><p style={{ color:C.muted, fontSize:13 }}>Analiză bazată pe sezonalitate și tendințe Google · {catalog.length} produse în catalog{trendsDate===new Date().toISOString().slice(0,10) && <span style={{ color:C.accent, marginLeft:8 }}>✓ actualizat azi</span>}</p></div>
+              <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                <button className="btn-s btn-sm" onClick={fetchGoogleTrends} disabled={loading}>📈 Încarcă tendințe Google</button>
+                <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:12, color:C.muted }}><input type="checkbox" checked={useGoogleTrends} onChange={e => setUseGoogleTrends(e.target.checked)} /> Folosește tendințe în AI</label>
                 {trends && <button className="btn-s btn-sm" onClick={() => generateTrends(true)}>🔄 Refresh</button>}
                 <button className="btn-p btn-sm" onClick={() => generateTrends()} disabled={!catalog.length}>🪄 Generează recomandări</button>
+                <button className="btn-s btn-sm" onClick={() => { const cached = lsGet("eb_trends"); const cachedDate = localStorage.getItem("eb_trends_date"); if (cached && cachedDate === new Date().toISOString().slice(0,10)) { setTrends(cached); setTrendsDate(cachedDate); alert("Încărcat din cache."); } else alert("Nu există cache pentru azi."); }}>💾 Folosește cache</button>
               </div>
             </div>
-
-            {!trends ? (
-              <div className="card" style={{ textAlign:"center", color:C.muted, padding:"48px 24px", fontSize:14 }}>
-                {!catalog.length
-                  ? <>Sincronizează mai întâi catalogul →{" "}<button className="btn-s btn-sm" onClick={() => setTab("sync")}>tab Sync</button></>
-                  : `Apasă „Generează recomandări" pentru analiza zilei de azi`}
-              </div>
-            ) : (
+            {googleTrends && googleTrends.length > 0 && <div style={{ background:C.accentDim, borderRadius:8, padding:"8px 12px", marginBottom:16, fontSize:12 }}>📊 Tendințe Google azi: {googleTrends.slice(0,5).join(" · ")}</div>}
+            {!trends ? <div className="card" style={{ textAlign:"center", color:C.muted, padding:"48px 24px", fontSize:14 }}>{!catalog.length ? <>Sincronizează mai întâi catalogul → <button className="btn-s btn-sm" onClick={() => setTab("sync")}>tab Sync</button></> : `Apasă „Generează recomandări" pentru analiza zilei de azi`}</div> : (
               <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
                 {trends.map((item, i) => {
                   const prod = catalog.find(p=>p.name===item.nume || p.name.includes(item.nume.substring(0,18))) || { name:item.nume, price:"?", img:"", link:"", desc:"", stoc:"" };
+                  const platform = postPlatform[i] || 'facebook';
+                  const postText = platform === 'facebook' ? item.facebook_post : item.instagram_caption;
+                  const isSelected = !!selectedPosts[`${i}-${platform}`];
                   return (
                     <div key={i} className="card" style={{ padding:0, overflow:"hidden" }}>
-                      <div style={{ background:"#0a0a1a", padding:"13px 18px", display:"flex", gap:13, alignItems:"center", borderBottom:`1px solid ${C.border}` }}>
+                      <div style={{ background:"#0a0a1a", padding:"13px 18px", display:"flex", gap:13, alignItems:"center", borderBottom:`1px solid ${C.border}`, flexWrap:"wrap" }}>
                         <span style={{ fontWeight:700, color:C.accent, fontSize:17, minWidth:30 }}>#{i+1}</span>
                         {prod.img && <img src={prod.img} style={{ width:44, height:44, objectFit:"cover", borderRadius:8, flexShrink:0 }} alt="" />}
-                        <div style={{ flex:1, minWidth:0 }}>
-                          <div style={{ fontWeight:600, fontSize:14, marginBottom:2 }}>{item.nume}</div>
-                          <div style={{ fontSize:12, color:C.accent }}>💡 {item.motiv}</div>
-                        </div>
+                        <div style={{ flex:1, minWidth:0 }}><div style={{ fontWeight:600, fontSize:14, marginBottom:2 }}>{item.nume}</div><div style={{ fontSize:12, color:C.accent }}>💡 {item.motiv}</div></div>
                         <div style={{ display:"flex", gap:7, flexShrink:0, flexWrap:"wrap" }}>
-                          <button className="btn-s btn-sm" onClick={() => { setSelProd(prod); setAdProd({ name:prod.name, price:prod.price, benefits:prod.desc, link:prod.link, imageUrl:null }); setTab("ads"); setAdsStep(1); }}>
-                            📝 Meta Ads
-                          </button>
+                          <button className="btn-s btn-sm" onClick={() => { setSelProd(prod); setAdProd({ name:prod.name, price:prod.price, benefits:prod.desc, link:prod.link, imageUrl:null }); setTab("ads"); setAdsStep(1); }}>📝 Meta Ads</button>
                           <button className="btn-s btn-sm" onClick={() => { setSelProd(prod); setTab("newsletter"); }}>✉️</button>
                           <button className="btn-s btn-sm" onClick={() => { setSelProd(prod); setTab("blog"); }}>✍️</button>
                           <button className="btn-s btn-sm" onClick={() => { setSelProd(prod); setTab("carousel"); }}>🎬</button>
+                          <a href={prod.link} target="_blank" rel="noreferrer" className="btn-s btn-sm" style={{ textDecoration:"none" }}>🔗 Produs</a>
+                          <button className="btn-s btn-sm" onClick={() => generateHashtags(item.nume, prod.desc)}>#️⃣ Hashtag-uri</button>
                         </div>
                       </div>
                       <div style={{ padding:"12px 18px" }}>
-                        <div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:.5, marginBottom:8 }}>🎯 4 idei de postări (hooks)</div>
-                        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:7 }}>
-                          {item.idei.map((idee, j) => (
-                            <div key={j} style={{ background:"#0a0a1a", padding:"8px 12px", borderRadius:8, fontSize:13, display:"flex", justifyContent:"space-between", alignItems:"center", gap:8 }}>
-                              <span style={{ color:C.sub, flex:1 }}>{idee}</span>
-                              <CopyBtn text={idee} id={`tr-${i}-${j}`} />
-                            </div>
-                          ))}
+                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+                          <div style={{ display:"flex", gap:8 }}><button className={`chip ${platform === 'facebook' ? 'on' : ''}`} onClick={() => setPostPlatform({...postPlatform, [i]: 'facebook'})}>📘 Facebook</button><button className={`chip ${platform === 'instagram' ? 'on' : ''}`} onClick={() => setPostPlatform({...postPlatform, [i]: 'instagram'})}>📸 Instagram</button></div>
+                          <CopyBtn text={postText} id={`post-${i}`} />
                         </div>
+                        <div style={{ background:"#0a0a1a", padding:"14px 16px", borderRadius:10, fontSize:13, lineHeight:1.65, color:C.sub, whiteSpace:"pre-wrap" }}>{postText}{platform === 'facebook' && (<div style={{ marginTop: 10, paddingTop: 8, borderTop: `1px solid ${C.border}`, color: C.accent }}>🔗 {prod.link}</div>)}</div>
+                        {platform === 'instagram' && <div style={{ fontSize:11, color:C.muted, marginTop:8, background:C.accentDim, padding:"6px 10px", borderRadius:6 }}>💡 Nu uita să adaugi imaginea produsului și link-ul în bio.</div>}
+                        <div style={{ marginTop: 16 }}><div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:.5, marginBottom:8 }}>🎯 4 idei de postări (hooks)</div><div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:7 }}>{item.idei.map((idee, j) => (<div key={j} style={{ background:"#0a0a1a", padding:"8px 12px", borderRadius:8, fontSize:13, display:"flex", justifyContent:"space-between", alignItems:"center", gap:8 }}><span style={{ color:C.sub, flex:1 }}>{idee}</span><CopyBtn text={idee} id={`tr-${i}-${j}`} /></div>))}</div></div>
+                        <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:12 }}><input type="checkbox" checked={isSelected} onChange={(e) => { const key = `${i}-${platform}`; setSelectedPosts(prev => ({ ...prev, [key]: e.target.checked })); }} /><span style={{ fontSize:12, color:C.muted }}>Selectează această postare pentru salvare</span></div>
                       </div>
                     </div>
                   );
                 })}
+                <div style={{ marginTop: 16, textAlign:"center", display:"flex", gap:8, justifyContent:"center", flexWrap:"wrap" }}>
+                  <button className="btn-s" onClick={() => { const allPosts = trends.map((t, idx) => `#${idx+1} ${t.nume}\n${postPlatform[idx] === 'facebook' ? t.facebook_post : t.instagram_caption}\n---`).join("\n\n"); copyText(allPosts, "all-posts"); }}>📋 Copiază toate postările</button>
+                  {Object.keys(selectedPosts).some(k => selectedPosts[k]) && sheetWebAppUrl && (
+                    <button className="btn-p" onClick={async () => {
+                      const entries = [];
+                      for (const [key, isSelected] of Object.entries(selectedPosts)) if (isSelected) {
+                        const [idx, platform] = key.split('-');
+                        const item = trends[parseInt(idx)];
+                        const prod = catalog.find(p => p.name === item.nume) || {};
+                        const text = platform === 'facebook' ? item.facebook_post : item.instagram_caption;
+                        entries.push({ produs: item.nume, platforma: platform, text: text, link: prod.link || "" });
+                      }
+                      if (entries.length === 0) return;
+                      setLoading(true); setLoadMsg("Se salvează în Google Sheets...");
+                      try {
+                        for (const entry of entries) await fetch(sheetWebAppUrl, { method: "POST", mode: "no-cors", headers: { "Content-Type": "application/json" }, body: JSON.stringify(entry) });
+                        alert(`✅ ${entries.length} postări salvate.`);
+                        setSelectedPosts({});
+                      } catch (err) { alert("Eroare la salvare: " + err.message); }
+                      finally { setLoading(false); setLoadMsg(""); }
+                    }}>📤 Salvează selectate în Google Sheets</button>
+                  )}
+                </div>
               </div>
             )}
           </div>
         )}
 
-        {/* ══════════════════════════════════════════════════
-            TAB: META ADS WIZARD
-        ══════════════════════════════════════════════════ */}
+        {/* TAB: META ADS */}
         {tab === "ads" && (
           <div>
             {/* Step bar */}
@@ -881,7 +1182,6 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
               <div>
                 <h2 style={{ fontFamily:"'Bricolage Grotesque'", fontSize:18, marginBottom:20 }}>Texte generate + Preview reclamă</h2>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 290px", gap:20, alignItems:"start" }}>
-                  {/* Left: variants */}
                   <div>
                     {adCopy.variants.length === 0 ? (
                       <div className="card" style={{ textAlign:"center", padding:32, marginBottom:14 }}>
@@ -918,43 +1218,28 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
                       </>
                     )}
                   </div>
-
-                  {/* Right: Ad preview */}
                   <div>
                     <div style={{ fontSize:12, color:C.muted, marginBottom:10, textTransform:"uppercase", letterSpacing:.5 }}>Preview Facebook</div>
                     {adCopy.variants[adCopy.selected] ? (
                       <div className="ad-preview">
                         <div style={{ display:"flex", alignItems:"center", padding:"10px 12px", gap:9 }}>
                           <div style={{ width:36, height:36, borderRadius:"50%", background:C.accent, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>🌱</div>
-                          <div>
-                            <div style={{ fontWeight:700, fontSize:13 }}>EcoBites</div>
-                            <div style={{ fontSize:10, color:"#65676B" }}>Sponsored · 🌍</div>
-                          </div>
+                          <div><div style={{ fontWeight:700, fontSize:13 }}>EcoBites</div><div style={{ fontSize:10, color:"#65676B" }}>Sponsored · 🌍</div></div>
                         </div>
                         <div style={{ padding:"0 12px 10px", fontSize:13, lineHeight:1.55, color:"#000" }}>
                           {adCopy.variants[adCopy.selected].primary_text}
                         </div>
-                        {adProd.imageUrl
-                          ? <img src={adProd.imageUrl} style={{ width:"100%", aspectRatio:"1/1", objectFit:"cover", display:"block" }} alt="" />
-                          : <div style={{ width:"100%", aspectRatio:"1/1", background:"#f0f2f5", display:"flex", alignItems:"center", justifyContent:"center", color:"#aaa", fontSize:13 }}>Adaugă imaginea ta</div>}
+                        {adProd.imageUrl ? <img src={adProd.imageUrl} style={{ width:"100%", aspectRatio:"1/1", objectFit:"cover" }} alt="" /> : <div style={{ width:"100%", aspectRatio:"1/1", background:"#f0f2f5", display:"flex", alignItems:"center", justifyContent:"center", color:"#aaa", fontSize:13 }}>Adaugă imaginea ta</div>}
                         <div style={{ background:"#f0f2f5", padding:"10px 12px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                          <div>
-                            <div style={{ fontSize:9, textTransform:"uppercase", color:"#65676B" }}>ecobites.ro</div>
-                            <div style={{ fontWeight:700, fontSize:13, color:"#000" }}>{adCopy.variants[adCopy.selected].headline}</div>
-                          </div>
-                          <button style={{ background:"#e4e6eb", border:"none", padding:"7px 11px", borderRadius:6, fontWeight:600, fontSize:12, cursor:"pointer" }}>
-                            {adCopy.variants[adCopy.selected].cta}
-                          </button>
+                          <div><div style={{ fontSize:9, textTransform:"uppercase", color:"#65676B" }}>ecobites.ro</div><div style={{ fontWeight:700, fontSize:13, color:"#000" }}>{adCopy.variants[adCopy.selected].headline}</div></div>
+                          <button style={{ background:"#e4e6eb", border:"none", padding:"7px 11px", borderRadius:6, fontWeight:600, fontSize:12, cursor:"pointer" }}>{adCopy.variants[adCopy.selected].cta}</button>
                         </div>
                       </div>
                     ) : (
-                      <div className="card" style={{ textAlign:"center", color:C.muted, fontSize:13, padding:40 }}>
-                        Generează texte pentru a vedea preview-ul
-                      </div>
+                      <div className="card" style={{ textAlign:"center", color:C.muted, fontSize:13, padding:40 }}>Generează texte pentru a vedea preview-ul</div>
                     )}
                   </div>
                 </div>
-
                 <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:16 }}>
                   <button className="btn-s" onClick={() => setAdsStep(2)}>← Înapoi</button>
                   <button className="btn-p" disabled={adCopy.selected===null} onClick={() => setAdsStep(4)}>Setează targeting →</button>
@@ -971,7 +1256,6 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
                   📍 <strong>România</strong> · People living in or recently in this location
                 </div>
                 <div style={{ display:"flex", flexDirection:"column", gap:13, marginBottom:24 }}>
-                  {/* Vârstă */}
                   <div className="card">
                     <div style={{ fontSize:13, fontWeight:500, marginBottom:12 }}>Interval de vârstă</div>
                     <div style={{ display:"flex", gap:12 }}>
@@ -986,7 +1270,6 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
                     </div>
                     <div style={{ fontSize:11, color:C.muted, marginTop:10 }}>💡 25–55 acoperă cel mai activ segment pentru produse naturale în România.</div>
                   </div>
-                  {/* Gen */}
                   <div className="card">
                     <div style={{ fontSize:13, fontWeight:500, marginBottom:10 }}>Gen</div>
                     <div style={{ display:"flex", gap:8 }}>
@@ -996,7 +1279,6 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
                     </div>
                     {targeting.gender==="all" && <div style={{ fontSize:11, color:C.muted, marginTop:10 }}>💡 La start lasă „Toate" — Meta găsește el publicul optim.</div>}
                   </div>
-                  {/* Interese */}
                   <div className="card">
                     <div style={{ fontSize:13, fontWeight:500, marginBottom:4 }}>Interese <span style={{ color:C.muted, fontWeight:400, fontSize:12 }}>(max 6)</span></div>
                     <div style={{ display:"flex", flexWrap:"wrap", gap:7, margin:"10px 0" }}>
@@ -1009,7 +1291,6 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
                     </div>
                     <div style={{ fontSize:11, color:targeting.interests.length>=6?C.err:C.muted }}>{targeting.interests.length}/6 selectate {targeting.interests.length>=6?"— limită atinsă":""}</div>
                   </div>
-                  {/* Buget */}
                   <div className="card">
                     <div style={{ fontSize:13, fontWeight:500, marginBottom:12 }}>Buget lunar (EUR)</div>
                     <input className="field" type="number" min={10} value={targeting.budgetMonthly} onChange={e=>setTargeting(t=>({...t,budgetMonthly:Number(e.target.value)}))} />
@@ -1019,13 +1300,10 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
                       <span style={{ marginLeft:"auto" }}><strong>{targeting.budgetMonthly} EUR</strong><span style={{ color:C.muted }}> total</span></span>
                     </div>
                   </div>
-                  {/* Durată */}
                   <div className="card">
                     <div style={{ fontSize:13, fontWeight:500, marginBottom:10 }}>Durată campanie: <span style={{ color:C.accent }}>{targeting.durationDays} zile</span></div>
                     <input type="range" min={7} max={60} value={targeting.durationDays} onChange={e=>setTargeting(t=>({...t,durationDays:Number(e.target.value)}))} />
-                    <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:C.muted, marginTop:5 }}>
-                      <span>7 zile</span><span>30 zile (recomandat)</span><span>60 zile</span>
-                    </div>
+                    <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:C.muted, marginTop:5 }}><span>7 zile</span><span>30 zile (recomandat)</span><span>60 zile</span></div>
                     <div style={{ fontSize:11, color:C.muted, marginTop:8 }}>💡 Algoritmul are nevoie de ~7 zile learning phase. 30 zile e minim pentru date relevante.</div>
                   </div>
                 </div>
@@ -1040,10 +1318,7 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
             {adsStep === 5 && (
               <div>
                 <h2 style={{ fontFamily:"'Bricolage Grotesque'", fontSize:18, marginBottom:14 }}>Tutorial Meta — deschide Ads Manager în paralel</h2>
-                <a href="https://adsmanager.facebook.com" target="_blank" rel="noreferrer"
-                  style={{ display:"inline-flex", alignItems:"center", gap:7, color:C.accent, fontSize:13, textDecoration:"none", background:C.accentDim, border:`1px solid ${C.accentBorder}`, padding:"7px 14px", borderRadius:8, marginBottom:20 }}>
-                  🔗 Deschide Meta Ads Manager
-                </a>
+                <a href="https://adsmanager.facebook.com" target="_blank" rel="noreferrer" style={{ display:"inline-flex", alignItems:"center", gap:7, color:C.accent, fontSize:13, textDecoration:"none", background:C.accentDim, border:`1px solid ${C.accentBorder}`, padding:"7px 14px", borderRadius:8, marginBottom:20 }}>🔗 Deschide Meta Ads Manager</a>
                 <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:20 }}>
                   {adTutorial().map((item,i) => (
                     <div key={i} className="card" style={{ padding:"13px 16px", display:"flex", gap:13, alignItems:"flex-start" }}>
@@ -1059,67 +1334,44 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
                     </div>
                   ))}
                 </div>
-                {/* Sumar campanie */}
                 <div style={{ background:C.accentDim, border:`1px solid ${C.accentBorder}`, borderRadius:12, padding:18, marginBottom:20 }}>
                   <div style={{ fontWeight:600, color:C.accent, fontSize:11, textTransform:"uppercase", letterSpacing:.5, marginBottom:12 }}>📋 Sumar complet</div>
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px 24px", fontSize:13, marginBottom:targeting.interests.length>0?10:0 }}>
-                    {[["Produs",adProd.name],["Preț",`${adProd.price} RON`],["Obiectiv",selectedObj?.label||"—"],["Vârstă",`${targeting.ageMin}–${targeting.ageMax} ani`],["Buget total",`${targeting.budgetMonthly} EUR`],["Buget zilnic",`${daily} EUR (${dailyRON} RON)`],["Durată",`${targeting.durationDays} zile`],["Gen",{all:"Toate",female:"Femei",male:"Bărbați"}[targeting.gender]]].map(([l,v]) => (
-                      <div key={l}><span style={{ color:C.muted }}>{l}: </span><strong>{v}</strong></div>
-                    ))}
+                    {[["Produs",adProd.name],["Preț",`${adProd.price} RON`],["Obiectiv",selectedObj?.label||"—"],["Vârstă",`${targeting.ageMin}–${targeting.ageMax} ani`],["Buget total",`${targeting.budgetMonthly} EUR`],["Buget zilnic",`${daily} EUR (${dailyRON} RON)`],["Durată",`${targeting.durationDays} zile`],["Gen",{all:"Toate",female:"Femei",male:"Bărbați"}[targeting.gender]]].map(([l,v]) => (<div key={l}><span style={{ color:C.muted }}>{l}: </span><strong>{v}</strong></div>))}
                   </div>
-                  {targeting.interests.length > 0 && (
-                    <div style={{ fontSize:13 }}><span style={{ color:C.muted }}>Interese: </span>{targeting.interests.join(", ")}</div>
-                  )}
+                  {targeting.interests.length > 0 && (<div style={{ fontSize:13 }}><span style={{ color:C.muted }}>Interese: </span>{targeting.interests.join(", ")}</div>)}
                 </div>
                 <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
                   <button className="btn-s" onClick={() => setAdsStep(4)}>← Înapoi</button>
-                  <button className="btn-p" onClick={() => { setAdsStep(1); setObjective(null); setAdProd({name:"",price:"",benefits:"",link:"",imageUrl:null}); setAdCopy({variants:[],selected:null,error:null}); setTargeting({ageMin:25,ageMax:55,gender:"all",interests:[],budgetMonthly:100,durationDays:30}); }}>
-                    🔄 Campanie nouă
-                  </button>
+                  <button className="btn-p" onClick={() => { setAdsStep(1); setObjective(null); setAdProd({name:"",price:"",benefits:"",link:"",imageUrl:null}); setAdCopy({variants:[],selected:null,error:null}); setTargeting({ageMin:25,ageMax:55,gender:"all",interests:[],budgetMonthly:100,durationDays:30}); }}>🔄 Campanie nouă</button>
                 </div>
               </div>
             )}
           </div>
         )}
 
-        {/* ══════════════════════════════════════════════════
-            TAB: NEWSLETTER
-        ══════════════════════════════════════════════════ */}
+        {/* TAB: NEWSLETTER */}
         {tab === "newsletter" && (
           <div>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20, flexWrap:"wrap", gap:12 }}>
-              <div>
-                <h2 style={{ fontFamily:"'Bricolage Grotesque'", fontSize:19, marginBottom:4 }}>✉️ Generator Newsletter</h2>
-                <p style={{ color:C.muted, fontSize:13 }}>Variante gata de copiat în TheMarketer sau orice platformă de email.</p>
-              </div>
+              <div><h2 style={{ fontFamily:"'Bricolage Grotesque'", fontSize:19, marginBottom:4 }}>✉️ Generator Newsletter</h2><p style={{ color:C.muted, fontSize:13 }}>Variante gata de copiat în TheMarketer sau orice platformă de email.</p></div>
               <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
                 <ProductPicker label="Produs:" />
                 <button className="btn-p btn-sm" onClick={() => generateNewsletter(2)} disabled={!selProd}>✉️ 2 variante</button>
                 <button className="btn-s btn-sm" onClick={() => generateNewsletter(3)} disabled={!selProd}>3 variante</button>
               </div>
             </div>
-
             <SelectedProdCard />
-
-            {!newsletterOut.length && !selProd && (
-              <div className="card" style={{ textAlign:"center", color:C.muted, padding:44 }}>Selectează un produs și apasă Generează</div>
-            )}
-
+            {!newsletterOut.length && !selProd && (<div className="card" style={{ textAlign:"center", color:C.muted, padding:44 }}>Selectează un produs și apasă Generează</div>)}
             {newsletterOut.map((item, i) => {
               const full = `📧 Subiect: ${item.subiect}\n📌 Pre-header: ${item.pre_header}\n\n${item.corp}\n\n→ ${item.cta}\n🔗 ${selProd?.link}`;
               return (
                 <div key={i} className="card" style={{ marginBottom:12 }}>
-                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
-                    <span style={{ fontWeight:600, fontSize:14 }}>Varianta {i+1}</span>
-                    <CopyBtn text={full} id={`nl-all-${i}`} />
-                  </div>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}><span style={{ fontWeight:600, fontSize:14 }}>Varianta {i+1}</span><CopyBtn text={full} id={`nl-all-${i}`} /></div>
                   {[["📧 Subiect",item.subiect],["📌 Pre-header",item.pre_header],["Corp email",item.corp],["CTA",item.cta]].map(([lbl,val]) => (
                     <div key={lbl} style={{ marginBottom:12 }}>
                       <div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:.5, marginBottom:4 }}>{lbl}</div>
-                      <div style={{ display:"flex", justifyContent:"space-between", gap:10 }}>
-                        <div style={{ fontSize:14, color:C.sub, lineHeight:1.6 }}>{val}</div>
-                        <CopyBtn text={val} id={`nl-${i}-${lbl}`} />
-                      </div>
+                      <div style={{ display:"flex", justifyContent:"space-between", gap:10 }}><div style={{ fontSize:14, color:C.sub, lineHeight:1.6 }}>{val}</div><CopyBtn text={val} id={`nl-${i}-${lbl}`} /></div>
                     </div>
                   ))}
                 </div>
@@ -1128,94 +1380,39 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
           </div>
         )}
 
-        {/* ══════════════════════════════════════════════════
-            TAB: CARUSEL / VIDEO
-        ══════════════════════════════════════════════════ */}
+        {/* TAB: CARUSEL / VIDEO */}
         {tab === "carousel" && (
           <div>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20, flexWrap:"wrap", gap:12 }}>
-              <div>
-                <h2 style={{ fontFamily:"'Bricolage Grotesque'", fontSize:19, marginBottom:4 }}>🎬 Carusel & Video Script</h2>
-                <p style={{ color:C.muted, fontSize:13 }}>5 slide-uri pentru carusel Instagram + script Reels/TikTok 15 secunde.</p>
-              </div>
-              <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
-                <ProductPicker label="" />
-                <button className="btn-p btn-sm" onClick={generateCarousel} disabled={!selProd}>🎬 Generează</button>
-              </div>
+              <div><h2 style={{ fontFamily:"'Bricolage Grotesque'", fontSize:19, marginBottom:4 }}>🎬 Carusel & Video Script</h2><p style={{ color:C.muted, fontSize:13 }}>5 slide-uri pentru carusel Instagram + script Reels/TikTok 15 secunde.</p></div>
+              <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}><ProductPicker label="" /><button className="btn-p btn-sm" onClick={generateCarousel} disabled={!selProd}>🎬 Generează</button></div>
             </div>
-
             <SelectedProdCard />
-
-            {!carouselOut ? (
-              <div className="card" style={{ textAlign:"center", color:C.muted, padding:44 }}>Selectează un produs și apasă Generează</div>
-            ) : (
-              <div className="card">
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
-                  <span style={{ fontWeight:600 }}>Script generat</span>
-                  <CopyBtn text={carouselOut} id="carousel-all" />
-                </div>
-                <pre style={{ whiteSpace:"pre-wrap", fontSize:14, lineHeight:1.75, color:C.sub, fontFamily:"inherit" }}>{carouselOut}</pre>
-                <button className="btn-s btn-sm" style={{ marginTop:16 }} onClick={generateCarousel}>🔄 Regenerează</button>
-              </div>
+            {!carouselOut ? (<div className="card" style={{ textAlign:"center", color:C.muted, padding:44 }}>Selectează un produs și apasă Generează</div>) : (
+              <div className="card"><div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}><span style={{ fontWeight:600 }}>Script generat</span><CopyBtn text={carouselOut} id="carousel-all" /></div><pre style={{ whiteSpace:"pre-wrap", fontSize:14, lineHeight:1.75, color:C.sub, fontFamily:"inherit" }}>{carouselOut}</pre><button className="btn-s btn-sm" style={{ marginTop:16 }} onClick={generateCarousel}>🔄 Regenerează</button></div>
             )}
           </div>
         )}
 
-        {/* ══════════════════════════════════════════════════
-            TAB: BLOG GOMAG
-        ══════════════════════════════════════════════════ */}
+        {/* TAB: BLOG GOMAG */}
         {tab === "blog" && (
           <div>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20, flexWrap:"wrap", gap:12 }}>
-              <div>
-                <h2 style={{ fontFamily:"'Bricolage Grotesque'", fontSize:19, marginBottom:4 }}>✍️ Generator Blog — Gomag</h2>
-                <p style={{ color:C.muted, fontSize:13 }}>Toate câmpurile necesare în Gomag, gata de copy-paste. Zero editare manuală.</p>
-              </div>
-              <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
-                <ProductPicker label="" />
-                <button className="btn-p btn-sm" onClick={generateBlog} disabled={!selProd}>✍️ Generează articol</button>
-              </div>
+              <div><h2 style={{ fontFamily:"'Bricolage Grotesque'", fontSize:19, marginBottom:4 }}>✍️ Generator Blog — Gomag</h2><p style={{ color:C.muted, fontSize:13 }}>Toate câmpurile necesare în Gomag, gata de copy-paste. Zero editare manuală.</p></div>
+              <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}><ProductPicker label="" /><button className="btn-p btn-sm" onClick={generateBlog} disabled={!selProd}>✍️ Generează articol</button></div>
             </div>
-
             <SelectedProdCard />
-
-            {!blogOut ? (
-              <div className="card" style={{ textAlign:"center", color:C.muted, padding:44 }}>Selectează un produs și apasă Generează articol</div>
-            ) : (
+            {!blogOut ? (<div className="card" style={{ textAlign:"center", color:C.muted, padding:44 }}>Selectează un produs și apasă Generează articol</div>) : (
               <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                {[
-                  { field:"titlu",       label:"Titlu articol (H1)",      hint:"→ câmpul Titlu din Gomag" },
-                  { field:"seo_url",     label:"SEO URL / Slug",          hint:"→ câmpul URL SEO din Gomag" },
-                  { field:"seo_titlu",   label:"SEO Title (Meta Title)",  hint:"Max 60 caractere" },
-                  { field:"meta_desc",   label:"Meta Description",        hint:"Max 160 caractere" },
-                  { field:"tags",        label:"Tag-uri",                 hint:"Separate prin virgulă" },
-                  { field:"link_produs", label:"Link produs (pentru CTA)",hint:"Butonul Comandă din articol" },
-                ].map(({field,label,hint}) => (
+                {[ { field:"titlu", label:"Titlu articol (H1)", hint:"→ câmpul Titlu din Gomag" }, { field:"seo_url", label:"SEO URL / Slug", hint:"→ câmpul URL SEO din Gomag" }, { field:"seo_titlu", label:"SEO Title (Meta Title)", hint:"Max 60 caractere" }, { field:"meta_desc", label:"Meta Description", hint:"Max 160 caractere" }, { field:"tags", label:"Tag-uri", hint:"Separate prin virgulă" }, { field:"link_produs", label:"Link produs (pentru CTA)", hint:"Butonul Comandă din articol" } ].map(({field,label,hint}) => (
                   <div key={field} className="card" style={{ padding:"14px 18px" }}>
-                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-                      <div>
-                        <div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:.5 }}>{label}</div>
-                        <div style={{ fontSize:11, color:C.border, marginTop:2 }}>{hint}</div>
-                      </div>
-                      <CopyBtn text={String(blogOut[field]||"")} id={`blog-${field}`} />
-                    </div>
-                    <div style={{ fontSize:14, color:C.sub, lineHeight:1.6, background:"#0a0a1a", padding:"9px 12px", borderRadius:8 }}>
-                      {String(blogOut[field]||"")}
-                    </div>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}><div><div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:.5 }}>{label}</div><div style={{ fontSize:11, color:C.border, marginTop:2 }}>{hint}</div></div><CopyBtn text={String(blogOut[field]||"")} id={`blog-${field}`} /></div>
+                    <div style={{ fontSize:14, color:C.sub, lineHeight:1.6, background:"#0a0a1a", padding:"9px 12px", borderRadius:8 }}>{String(blogOut[field]||"")}</div>
                   </div>
                 ))}
-                {/* HTML content */}
                 <div className="card" style={{ padding:"14px 18px" }}>
-                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-                    <div>
-                      <div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:.5 }}>Conținut HTML</div>
-                      <div style={{ fontSize:11, color:C.border, marginTop:2 }}>→ Paste în editorul HTML din Gomag (buton &lt;/&gt;)</div>
-                    </div>
-                    <CopyBtn text={String(blogOut.continut_html||"")} id="blog-html" />
-                  </div>
-                  <div style={{ fontSize:13, color:C.sub, lineHeight:1.7, background:"#0a0a1a", padding:"12px 14px", borderRadius:8, maxHeight:280, overflowY:"auto", fontFamily:"monospace", wordBreak:"break-word" }}>
-                    {blogOut.continut_html}
-                  </div>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}><div><div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:.5 }}>Conținut HTML</div><div style={{ fontSize:11, color:C.border, marginTop:2 }}>→ Paste în editorul HTML din Gomag (buton &lt;/&gt;)</div></div><CopyBtn text={String(blogOut.continut_html||"")} id="blog-html" /></div>
+                  <div style={{ fontSize:13, color:C.sub, lineHeight:1.7, background:"#0a0a1a", padding:"12px 14px", borderRadius:8, maxHeight:280, overflowY:"auto", fontFamily:"monospace", wordBreak:"break-word" }}>{blogOut.continut_html}</div>
                 </div>
                 <button className="btn-s btn-sm" onClick={generateBlog}>🔄 Regenerează articol</button>
               </div>
@@ -1223,15 +1420,11 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
           </div>
         )}
 
-        {/* ══════════════════════════════════════════════════
-            TAB: BUFFER
-        ══════════════════════════════════════════════════ */}
+        {/* TAB: BUFFER (modificat cu integrare API) */}
         {tab === "buffer" && (
           <div>
             <h2 style={{ fontFamily:"'Bricolage Grotesque'", fontSize:19, marginBottom:6 }}>📤 Buffer — Postări Organice</h2>
             <p style={{ color:C.muted, fontSize:13, marginBottom:20 }}>Programează postări pe Facebook, Instagram, TikTok, Threads, și X.</p>
-
-            {/* Produs selector */}
             <div className="card" style={{ marginBottom:14 }}>
               <div style={{ fontSize:13, fontWeight:500, marginBottom:12 }}>Alege produs</div>
               <ProductPicker label="" />
@@ -1245,8 +1438,6 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
                 </div>
               )}
             </div>
-
-            {/* Text postare */}
             <div className="card" style={{ marginBottom:14 }}>
               <div style={{ fontSize:13, fontWeight:500, marginBottom:10 }}>Text postare</div>
               {selectedAd && selProd ? (
@@ -1257,11 +1448,10 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
                     {selProd.link}
                   </div>
                   <div style={{ display:"flex", gap:8 }}>
-                    <CopyBtn
-                      text={`${selectedAd.headline}\n\n${selectedAd.primary_text}\n\n${selProd.link}`}
-                      id="buffer-text"
-                    />
-                    <span style={{ fontSize:12, color:C.muted, alignSelf:"center" }}>Text preluat din varianta selectată în Meta Ads</span>
+                    <CopyBtn text={`${selectedAd.headline}\n\n${selectedAd.primary_text}\n\n${selProd.link}`} id="buffer-text" />
+                    <button className="btn-p btn-sm" onClick={() => postToBuffer(`${selectedAd.headline}\n\n${selectedAd.primary_text}\n\n${selProd.link}`)}>
+                      📤 Postează în Buffer (draft)
+                    </button>
                   </div>
                 </div>
               ) : (
@@ -1271,8 +1461,6 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
                 </div>
               )}
             </div>
-
-            {/* Platforme */}
             <div className="card" style={{ marginBottom:14 }}>
               <div style={{ fontSize:13, fontWeight:500, marginBottom:10 }}>Platforme disponibile în contul tău Buffer</div>
               <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
@@ -1281,21 +1469,197 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
                 ))}
               </div>
             </div>
-
-            {/* CORS warning */}
             <div style={{ background:"rgba(251,191,36,.06)", border:`1px solid rgba(251,191,36,.2)`, borderRadius:12, padding:16, marginBottom:16, fontSize:13, lineHeight:1.7 }}>
-              <strong style={{ color:C.warn }}>⚠️ Despre integrarea directă Buffer:</strong>
+              <strong style={{ color:C.warn }}>ℹ️ Cum funcționează:</strong>
               <div style={{ color:C.sub, marginTop:6 }}>
-                Buffer blochează request-urile direct din browser (politică CORS). Textul generat îl copiezi cu butonul de mai sus și îl paste-uiești manual în Buffer — sunt 30 de secunde de muncă.<br/>
-                Pentru automatizare completă (fără copy-paste), ai nevoie de o funcție Vercel Serverless (~20 linii de cod) care să servească drept proxy. Îți pot scrie acea funcție oricând.
+                Postările sunt trimise ca <strong>draft</strong> în Buffer. Poți să le editezi și să le programezi ulterior din contul Buffer.<br/>
+                Analytics-ul Buffer rămâne disponibil în contul tău Buffer.
+              </div>
+            </div>
+            <a href="https://publish.buffer.com" target="_blank" rel="noreferrer" style={{ display:"inline-flex", alignItems:"center", gap:7, color:C.accent, fontSize:13, textDecoration:"none", background:C.accentDim, border:`1px solid ${C.accentBorder}`, padding:"9px 16px", borderRadius:9 }}>🔗 Deschide Buffer</a>
+            {bufferStatus && <div style={{ marginTop:12, color:C.accent, fontSize:13 }}>{bufferStatus}</div>}
+          </div>
+        )}
+
+        {/* TAB: MANUAL & EDITOR */}
+        {tab === "manual" && (
+          <div>
+            {/* Selectare manuală cu butoane de reordonare */}
+            <div className="card" style={{ marginBottom: 24 }}>
+              <h4 style={{ marginBottom: 12 }}>🛍️ Selectare manuală produse</h4>
+              <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+                <input className="field" placeholder="Filtrează după nume" value={filter} onChange={e => setFilter(e.target.value)} style={{ flex: 1 }} />
+                <input className="field" type="number" placeholder="Preț min" value={priceMin} onChange={e => setPriceMin(Number(e.target.value))} style={{ width: 100 }} />
+                <input className="field" type="number" placeholder="Preț max" value={priceMax} onChange={e => setPriceMax(Number(e.target.value))} style={{ width: 100 }} />
+              </div>
+              <div style={{ display: "flex", gap: 20 }}>
+                {/* Catalog */}
+                <div style={{ flex: 1, maxHeight: 300, overflowY: "auto", border: `1px solid ${C.border}`, borderRadius: 8, padding: 8 }}>
+                  <div style={{ fontWeight: 600, marginBottom: 8 }}>Catalog ({catalog.filter(p => p.name.toLowerCase().includes(filter.toLowerCase()) && p.price >= priceMin && p.price <= priceMax).length})</div>
+                  {catalog.filter(p => p.name.toLowerCase().includes(filter.toLowerCase()) && p.price >= priceMin && p.price <= priceMax).map(p => (
+                    <div key={p.name} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0", borderBottom: `1px solid ${C.border}` }}>
+                      <input type="checkbox" checked={!!selectedProducts.find(sp => sp.name === p.name)} onChange={() => {
+                        const exists = selectedProducts.find(sp => sp.name === p.name);
+                        if (exists) setSelectedProducts(selectedProducts.filter(sp => sp.name !== p.name));
+                        else setSelectedProducts([...selectedProducts, p]);
+                      }} />
+                      <span style={{ flex: 1, fontSize: 13 }}>{p.name}</span>
+                      <span style={{ fontSize: 12, color: C.accent }}>{p.price} RON</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Lista selectată cu butoane de reordonare */}
+                <div style={{ flex: 1, maxHeight: 300, overflowY: "auto", border: `1px solid ${C.accentBorder}`, borderRadius: 8, padding: 8, background: C.accentDim }}>
+                  <div style={{ fontWeight: 600, marginBottom: 8 }}>Selectate ({selectedProducts.length})</div>
+                  {selectedProducts.map((p, idx) => (
+                    <div key={p.name} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0", borderBottom: `1px solid ${C.border}` }}>
+                      <span style={{ flex: 1, fontSize: 13 }}>{p.name}</span>
+                      <button className="btn-s btn-sm" style={{ padding: "2px 6px" }} onClick={() => {
+                        if (idx > 0) {
+                          const newList = [...selectedProducts];
+                          [newList[idx-1], newList[idx]] = [newList[idx], newList[idx-1]];
+                          setSelectedProducts(newList);
+                        }
+                      }} disabled={idx === 0}>▲</button>
+                      <button className="btn-s btn-sm" style={{ padding: "2px 6px" }} onClick={() => {
+                        if (idx < selectedProducts.length - 1) {
+                          const newList = [...selectedProducts];
+                          [newList[idx], newList[idx+1]] = [newList[idx+1], newList[idx]];
+                          setSelectedProducts(newList);
+                        }
+                      }} disabled={idx === selectedProducts.length - 1}>▼</button>
+                      <button className="btn-s btn-sm" style={{ padding: "2px 6px", color: C.err }} onClick={() => setSelectedProducts(selectedProducts.filter(sp => sp.name !== p.name))}>✕</button>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
 
-            <a href="https://publish.buffer.com" target="_blank" rel="noreferrer"
-              style={{ display:"inline-flex", alignItems:"center", gap:7, color:C.accent, fontSize:13, textDecoration:"none", background:C.accentDim, border:`1px solid ${C.accentBorder}`, padding:"9px 16px", borderRadius:9 }}>
-              🔗 Deschide Buffer
-            </a>
-            {bufferStatus && <div style={{ marginTop:12, color:C.accent, fontSize:13 }}>{bufferStatus}</div>}
+            {/* Istoric trenduri cu filtre */}
+            <div className="card" style={{ marginBottom: 24 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12, flexWrap:"wrap", gap:8 }}>
+                <h4 style={{ margin:0 }}>📅 Istoric trenduri</h4>
+                <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                  <span style={{ fontSize:12, color:C.muted }}>Sortare:</span>
+                  <select className="field" style={{ width:"auto", padding:"4px 8px" }} value={historySort} onChange={e => setHistorySort(e.target.value)}>
+                    <option value="date_desc">📅 Cele mai noi</option>
+                    <option value="date_asc">📅 Cele mai vechi</option>
+                    <option value="likes_desc">👍 Cele mai apreciate</option>
+                    <option value="dislikes_desc">👎 Cele mai contestate</option>
+                  </select>
+                </div>
+              </div>
+              <div style={{ maxHeight: 300, overflowY: "auto" }}>
+                {(() => {
+                  const perf = JSON.parse(localStorage.getItem("eb_post_performance") || "{}");
+                  const entriesWithStats = trendHistory.map(entry => {
+                    let likes = 0, dislikes = 0;
+                    if (entry.trends) {
+                      entry.trends.forEach(t => {
+                        const key = `${t.nume}`;
+                        likes += perf[key]?.likes || 0;
+                        dislikes += perf[key]?.dislikes || 0;
+                      });
+                    }
+                    return { ...entry, likes, dislikes };
+                  });
+                  let sorted = [...entriesWithStats];
+                  if (historySort === "date_desc") sorted.sort((a,b) => new Date(b.date) - new Date(a.date));
+                  else if (historySort === "date_asc") sorted.sort((a,b) => new Date(a.date) - new Date(b.date));
+                  else if (historySort === "likes_desc") sorted.sort((a,b) => b.likes - a.likes);
+                  else if (historySort === "dislikes_desc") sorted.sort((a,b) => b.dislikes - a.dislikes);
+                  return sorted.map(entry => (
+                    <div key={entry.date} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:`1px solid ${C.border}` }}>
+                      <div><span style={{ fontSize:13 }}>{entry.date}</span><span style={{ fontSize:11, color:C.muted, marginLeft:12 }}>👍 {entry.likes} 👎 {entry.dislikes}</span></div>
+                      <button className="btn-s btn-sm" onClick={() => { setTrends(entry.trends); setTrendsDate(entry.date); alert(`Încărcat trend din ${entry.date}`); }}>Încarcă</button>
+                    </div>
+                  ));
+                })()}
+                {trendHistory.length === 0 && <div style={{ color: C.muted, fontSize:13, textAlign:"center", padding:20 }}>Niciun istoric disponibil. Generează trenduri pentru a le salva.</div>}
+              </div>
+            </div>
+
+            {/* Editor postări pentru produsele selectate */}
+            <h4 style={{ margin: "20px 0 10px" }}>✏️ Editează postările selectate</h4>
+            {selectedProducts.map(prod => {
+              const platform = postPlatform[prod.name] || "facebook";
+              const template = platform === "facebook" ? templates.facebook : templates.instagram;
+              let emojiStr = useEmoji ? "🌱✨💚" : "";
+              let brandText = includeBrandText ? brandDescription : "";
+              let hashtags = platform === "instagram" ? defaultHashtags : "";
+              let preview = (template || "")
+                .replace(/{nume}/g, prod.name)
+                .replace(/{pret}/g, prod.price)
+                .replace(/{link}/g, prod.link)
+                .replace(/{descriere}/g, prod.desc.substring(0, 120))
+                .replace(/{emoji}/g, emojiStr)
+                .replace(/{despre_brand}/g, brandText)
+                .replace(/{hashtaguri}/g, hashtags);
+              return (
+                <div key={prod.name} className="card" style={{ marginBottom: 16 }}>
+                  <h5 style={{ marginBottom: 8 }}>✏️ Editează postarea pentru {prod.name}</h5>
+                  <textarea className="field" rows={6} value={editedPosts[`${prod.name}-${platform}`] || preview} onChange={e => setEditedPosts({...editedPosts, [`${prod.name}-${platform}`]: e.target.value})} style={{ marginBottom: 12 }} />
+                  <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                    <button className="btn-s btn-sm" onClick={() => { setEditedPosts({...editedPosts, [`${prod.name}-${platform}`]: preview}); }}>Aplică șablon</button>
+                    <button className="btn-p btn-sm" onClick={() => alert(`Postare salvată pentru ${prod.name}`)}>Salvează postarea</button>
+                    <button className="btn-s btn-sm" onClick={() => generateHashtags(prod.name, prod.desc)}>#️⃣ Hashtag-uri</button>
+                  </div>
+                  <div style={{ marginTop: 12, background: "#0a0a1a", padding: 12, borderRadius: 8, fontSize: 13, whiteSpace: "pre-wrap" }}>
+                    <strong>Previzualizare:</strong><br/>{editedPosts[`${prod.name}-${platform}`] || preview}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* TAB: RAPOARTE */}
+        {tab === "reports" && (
+          <div>
+            <div className="card" style={{ marginBottom: 24 }}>
+              <h4 style={{ marginBottom: 12 }}>📈 Raport lunar (ultimele 30 zile)</h4>
+              <button className="btn-s btn-sm" onClick={() => {
+                const now = new Date();
+                const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+                const recentTrends = trendHistory.filter(entry => new Date(entry.date) >= thirtyDaysAgo);
+                const totalPostsGenerated = recentTrends.reduce((acc, day) => acc + (day.trends?.length || 0), 0);
+                const perf = JSON.parse(localStorage.getItem("eb_post_performance") || "{}");
+                const totalLikes = Object.values(perf).reduce((sum, p) => sum + (p.likes || 0), 0);
+                const totalDislikes = Object.values(perf).reduce((sum, p) => sum + (p.dislikes || 0), 0);
+                const productCount = {};
+                recentTrends.forEach(day => {
+                  day.trends?.forEach(t => { productCount[t.nume] = (productCount[t.nume] || 0) + 1; });
+                });
+                const topProducts = Object.entries(productCount).sort((a,b) => b[1] - a[1]).slice(0,5);
+                const totalProducts = catalog.length;
+                const avgPrice = catalog.reduce((sum, p) => sum + p.price, 0) / (totalProducts || 1);
+                alert(`
+📊 RAPORT LUNAR (${thirtyDaysAgo.toISOString().slice(0,10)} → ${now.toISOString().slice(0,10)})
+📝 Postări generate: ${totalPostsGenerated}
+👍 Like-uri totale: ${totalLikes}  👎 Dislike-uri: ${totalDislikes}
+📦 Produse în catalog: ${totalProducts} (preț mediu ${avgPrice.toFixed(2)} RON)
+🏆 Top 5 produse promovate:
+${topProducts.map(([n,c]) => `   ${n} – ${c} ori`).join("\n")}
+                `);
+              }}>📊 Generează raport lunar</button>
+              <p style={{ fontSize:12, color:C.muted, marginTop:12 }}>Raportul se calculează pe baza istoricului de trenduri și a interacțiunilor salvate (like/dislike).</p>
+            </div>
+            <div className="card">
+              <h4 style={{ marginBottom: 12 }}>📊 Performanță generală postări</h4>
+              <div style={{ maxHeight: 300, overflowY: "auto" }}>
+                {Object.entries(JSON.parse(localStorage.getItem("eb_post_performance") || "{}")).map(([id, data]) => (
+                  <div key={id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"6px 0", borderBottom:`1px solid ${C.border}` }}>
+                    <span style={{ fontSize:12, flex:1 }}>{id.substring(0, 50)}</span>
+                    <span style={{ color:"#4ade80" }}>👍 {data.likes || 0}</span>
+                    <span style={{ color:"#f87171", marginLeft:12 }}>👎 {data.dislikes || 0}</span>
+                  </div>
+                ))}
+                {Object.keys(JSON.parse(localStorage.getItem("eb_post_performance") || "{}")).length === 0 && (
+                  <div style={{ color: C.muted, fontSize:13, textAlign:"center", padding:20 }}>Nicio interacțiune înregistrată.</div>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
@@ -1305,7 +1669,6 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
           {catalogDate && <> · Catalog sync: <strong style={{ color:C.sub }}>{catalogDate}</strong></>}
           {trendsDate && <> · Trends: <strong style={{ color:C.sub }}>{trendsDate}</strong></>}
         </div>
-
       </div>
     </div>
   );
