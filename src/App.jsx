@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import * as XLSX from "xlsx";
 
 // ─── Config ───────────────────────────────────────────────────────────
 const LS_KEY = "ecobites_hub_v4";
@@ -81,9 +82,6 @@ export default function EcoBitesHub() {
   const [priceMin,     setPriceMin]     = useState(saved.priceMin || 0);
   const [priceMax,     setPriceMax]     = useState(saved.priceMax || 9999);
   const [sheetWebAppUrl, setSheetWebAppUrl] = useState(saved.sheetWebAppUrl || "");
-  const [newsletterSearch, setNewsletterSearch] = useState("");
-  const [carouselSearch, setCarouselSearch] = useState("");
-  const [blogSearch, setBlogSearch] = useState("");
 
   // Brand & ton
   const [brandDescription, setBrandDescription] = useState(saved.brandDescription || "EcoBites – produse naturale pentru un stil de viață sănătos.");
@@ -106,6 +104,9 @@ export default function EcoBitesHub() {
   const [newsletterProducts, setNewsletterProducts] = useState([]);
   const [carouselProducts, setCarouselProducts] = useState([]);
   const [blogProducts, setBlogProducts] = useState([]);
+  const [newsletterSearch, setNewsletterSearch] = useState("");
+  const [carouselSearch, setCarouselSearch] = useState("");
+  const [blogSearch, setBlogSearch] = useState("");
 
   // General content
   const [generalTopic, setGeneralTopic] = useState("");
@@ -196,7 +197,7 @@ export default function EcoBitesHub() {
     if (!openaiKey) throw new Error("Lipsă cheie OpenAI — adaugă în ⚙️ Setări");
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
       method:"POST", headers:{"Content-Type":"application/json","Authorization":`Bearer ${openaiKey}`},
-      body: JSON.stringify({ model:openaiModel, messages:[{role:"user",content:prompt}], temperature:0.7, max_tokens:4096 })
+      body: JSON.stringify({ model:openaiModel, messages:[{role:"user",content:prompt}], temperature:0.7, max_tokens:8192 })
     });
     const d = await res.json();
     if (d.error) throw new Error(d.error.message);
@@ -206,7 +207,7 @@ export default function EcoBitesHub() {
   const callAnthropic = async (prompt) => {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:1500, messages:[{role:"user",content:prompt}] }),
+      body: JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:4096, messages:[{role:"user",content:prompt}] }),
     });
     const d = await res.json();
     if (d.error) throw new Error(d.error.message);
@@ -218,7 +219,7 @@ export default function EcoBitesHub() {
     const model = geminiModel === "gemini-2.5-flash" ? "gemini-2.5-flash" : "gemini-2.0-flash";
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`, {
       method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ contents:[{parts:[{text:prompt}]}], generationConfig:{temperature:0.7, maxOutputTokens:4096} }),
+      body: JSON.stringify({ contents:[{parts:[{text:prompt}]}], generationConfig:{temperature:0.7, maxOutputTokens:8192} }),
     });
     const d = await res.json();
     if (d.error) throw new Error(d.error.message);
@@ -235,7 +236,7 @@ export default function EcoBitesHub() {
       const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method:"POST",
         headers:{"Content-Type":"application/json","Authorization":`Bearer ${orKey}`,"HTTP-Referer":"https://ecobites.ro","X-Title":"EcoBites Hub"},
-        body: JSON.stringify({ model:modelToUse, messages:[{role:"user",content:prompt}], max_tokens:4096 }),
+        body: JSON.stringify({ model:modelToUse, messages:[{role:"user",content:prompt}], max_tokens:8192 }),
       });
       const d = await res.json();
       if (d.error) {
@@ -259,7 +260,7 @@ export default function EcoBitesHub() {
     if (!hfKey) throw new Error("Lipsă cheie HuggingFace — adaugă în ⚙️ Setări");
     const res = await fetch(`https://api-inference.huggingface.co/models/${hfModel}`, {
       method:"POST", headers:{"Content-Type":"application/json","Authorization":`Bearer ${hfKey}`},
-      body: JSON.stringify({ inputs:prompt, parameters:{max_new_tokens:4096, temperature:0.7, return_full_text:false} }),
+      body: JSON.stringify({ inputs:prompt, parameters:{max_new_tokens:8192, temperature:0.7, return_full_text:false} }),
     });
     const d = await res.json();
     if (d.error) throw new Error(d.error);
@@ -279,11 +280,18 @@ export default function EcoBitesHub() {
 
   const callAIJson = async (prompt) => {
     const raw = await callAI(prompt);
-    const match = raw.match(/\{[\s\S]*\}/);
+    console.log("Răspuns brut AI:", raw);
+    let match = raw.match(/\{[\s\S]*\}/);
+    if (!match) match = raw.match(/\[[\s\S]*\]/);
     if (!match) throw new Error(`AI nu a returnat JSON valid. Primele 200 caractere: ${raw.substring(0,200)}`);
     let jsonStr = match[0];
     jsonStr = jsonStr.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-    return JSON.parse(jsonStr);
+    try {
+      return JSON.parse(jsonStr);
+    } catch (e) {
+      console.error("JSON invalid:", jsonStr);
+      throw new Error(`Eroare parsare JSON: ${e.message}`);
+    }
   };
 
   const buildPromptWithBrand = (basePrompt) => {
@@ -294,6 +302,45 @@ export default function EcoBitesHub() {
     const toneContext = `Scrie într-un ton ${postTone}. ${useEmoji ? "Adaugă 3-4 emoji-uri potrivite." : "Nu folosi emoji-uri."}\n`;
     const hashtagContext = `La finalul postării pentru Instagram, adaugă aceste hashtag-uri: ${defaultHashtags}\n`;
     return brandContext + toneContext + hashtagContext + basePrompt;
+  };
+
+  // ── Parsare CSV/Excel cu detectare coloane ───────────────────────────
+  const parseCSVWithHeaders = (csvText) => {
+    const lines = csvText.split(/\r?\n/);
+    if (lines.length < 2) return [];
+    const headers = lines[0].split(',').map(h => h.replace(/^"|"$/g, '').trim().toLowerCase());
+    const colMap = {
+      nume: headers.findIndex(h => h.includes('denumire') || h === 'nume' || h === 'produs'),
+      pret: headers.findIndex(h => h.includes('pret') || h === 'price'),
+      stoc: headers.findIndex(h => h.includes('stoc') || h === 'stock'),
+      link: headers.findIndex(h => h.includes('link') || h === 'url'),
+      imagine: headers.findIndex(h => h.includes('poza') || h.includes('imagine')),
+      descriere: headers.findIndex(h => h.includes('descriere'))
+    };
+    if (colMap.nume === -1) colMap.nume = 0;
+    if (colMap.pret === -1) colMap.pret = 1;
+    if (colMap.stoc === -1) colMap.stoc = 2;
+    if (colMap.link === -1) colMap.link = 3;
+    if (colMap.imagine === -1) colMap.imagine = 4;
+    if (colMap.descriere === -1) colMap.descriere = 5;
+
+    const result = [];
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      const cols = line.match(/(".*?"|[^,]+)(?=\s*,|\s*$)/g)?.map(c => c.replace(/^"|"$/g, '').trim()) || [];
+      if (cols.length < Math.max(...Object.values(colMap)) + 1) continue;
+      const name = cols[colMap.nume];
+      if (!name) continue;
+      const price = parseFloat(cols[colMap.pret].replace(',', '.'));
+      if (isNaN(price) || price <= 0) continue;
+      const stoc = cols[colMap.stoc];
+      const link = cols[colMap.link];
+      const img = cols[colMap.imagine];
+      const desc = cols[colMap.descriere];
+      result.push({ name, price, stoc, link, img, desc });
+    }
+    return result;
   };
 
   // Google Trends fetch
@@ -316,7 +363,7 @@ export default function EcoBitesHub() {
     }
   };
 
-  // Catalog sync
+  // Catalog sync (URL)
   const syncCatalog = async (force = false) => {
     if (!feedUrl) { alert("Adaugă URL-ul CSV în ⚙️ Setări"); return; }
     const today = new Date().toISOString().slice(0,10);
@@ -329,18 +376,7 @@ export default function EcoBitesHub() {
       const res = await fetch(finalUrl);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const text = await res.text();
-      const parsed = text.split("\n").slice(1).map(row => {
-        const cols = row.match(/(".*?"|[^,]+)(?=\s*,|\s*$)/g)?.map(c => c.replace(/^"|"$/g,"").trim()) || [];
-        if (cols.length < 6) return null;
-        const name = cols[0];
-        const price = parseFloat(cols[1].replace(',', '.'));
-        if (isNaN(price) || price <= 0) return null;
-        const stoc = cols[2];
-        const link = cols[3];
-        const img = cols[4];
-        const desc = cols[5];
-        return { name, price, stoc, link, img, desc };
-      }).filter(p => p && p.name);
+      const parsed = parseCSVWithHeaders(text);
       const filtered = parsed.filter(p => p.price >= priceMin && p.price <= priceMax);
       setCatalog(filtered); setCatalogDate(today);
       lsSet("eb_catalog", filtered);
@@ -349,27 +385,57 @@ export default function EcoBitesHub() {
     setLoading(false); setLoadMsg("");
   };
 
+  // Manual upload (CSV, XLSX, XLS)
   const handleManualUpload = (event) => {
     const file = event.target.files[0];
     if (!file) return;
     setLoading(true);
-    setLoadMsg("Procesez fișierul CSV încărcat...");
+    setLoadMsg("Procesez fișierul încărcat...");
+    const extension = file.name.split('.').pop().toLowerCase();
     const reader = new FileReader();
+
     reader.onload = (e) => {
       try {
-        const text = e.target.result;
-        const parsed = text.split("\n").slice(1).map(row => {
-          const cols = row.match(/(".*?"|[^,]+)(?=\s*,|\s*$)/g)?.map(c => c.replace(/^"|"$/g, "").trim()) || [];
-          if (cols.length < 6) return null;
-          const name = cols[0];
-          const price = parseFloat(cols[1].replace(',', '.'));
-          if (isNaN(price) || price <= 0) return null;
-          const stoc = cols[2];
-          const link = cols[3];
-          const img = cols[4];
-          const desc = cols[5];
-          return { name, price, stoc, link, img, desc };
-        }).filter(p => p && p.name);
+        let parsed;
+        if (extension === 'csv') {
+          const text = e.target.result;
+          parsed = parseCSVWithHeaders(text);
+        } else {
+          // Excel
+          const workbook = XLSX.read(e.target.result, { type: 'binary' });
+          const sheetName = workbook.SheetNames[0];
+          const sheet = workbook.Sheets[sheetName];
+          const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+          if (!rows || rows.length < 2) throw new Error("Fișierul nu conține date");
+          const headers = rows[0].map(cell => String(cell || "").trim().toLowerCase());
+          const colIndex = {
+            nume: headers.findIndex(h => h.includes('denumire') || h === 'nume' || h === 'produs'),
+            pret: headers.findIndex(h => h.includes('pret') || h === 'price'),
+            stoc: headers.findIndex(h => h.includes('stoc') || h === 'stock'),
+            link: headers.findIndex(h => h.includes('link') || h === 'url'),
+            imagine: headers.findIndex(h => h.includes('poza') || h.includes('imagine')),
+            descriere: headers.findIndex(h => h.includes('descriere'))
+          };
+          if (colIndex.nume === -1) colIndex.nume = 0;
+          if (colIndex.pret === -1) colIndex.pret = 1;
+          if (colIndex.stoc === -1) colIndex.stoc = 2;
+          if (colIndex.link === -1) colIndex.link = 3;
+          if (colIndex.imagine === -1) colIndex.imagine = 4;
+          if (colIndex.descriere === -1) colIndex.descriere = 5;
+
+          parsed = rows.slice(1).map(row => {
+            const name = row[colIndex.nume] ? String(row[colIndex.nume]).trim() : "";
+            if (!name) return null;
+            const price = parseFloat(String(row[colIndex.pret] || "0").replace(',', '.'));
+            if (isNaN(price) || price <= 0) return null;
+            const stoc = row[colIndex.stoc] ? String(row[colIndex.stoc]).trim() : "";
+            const link = row[colIndex.link] ? String(row[colIndex.link]).trim() : "";
+            const img = row[colIndex.imagine] ? String(row[colIndex.imagine]).trim() : "";
+            const desc = row[colIndex.descriere] ? String(row[colIndex.descriere]).trim() : "";
+            return { name, price, stoc, link, img, desc };
+          }).filter(p => p);
+        }
+
         const filtered = parsed.filter(p => p.price >= priceMin && p.price <= priceMax);
         const today = new Date().toISOString().slice(0,10);
         setCatalog(filtered);
@@ -377,20 +443,33 @@ export default function EcoBitesHub() {
         lsSet("eb_catalog", filtered);
         localStorage.setItem("eb_catalog_date", today);
         alert(`✅ Catalog încărcat cu succes: ${filtered.length} produse`);
-      } catch (err) { alert("Eroare la parsarea fișierului CSV: " + err.message); }
-      finally { setLoading(false); setLoadMsg(""); }
+      } catch (err) {
+        console.error(err);
+        alert("Eroare la parsarea fișierului: " + err.message);
+      } finally {
+        setLoading(false);
+        setLoadMsg("");
+      }
     };
-    reader.onerror = () => { alert("Eroare la citirea fișierului"); setLoading(false); setLoadMsg(""); };
-    reader.readAsText(file, "UTF-8");
+    reader.onerror = () => {
+      alert("Eroare la citirea fișierului");
+      setLoading(false);
+      setLoadMsg("");
+    };
+    if (extension === 'csv') {
+      reader.readAsText(file, "UTF-8");
+    } else {
+      reader.readAsBinaryString(file);
+    }
   };
 
-  // Generate trends (prompt optimizat pentru postări lungi)
+  // Generate trends (10 produse)
   const generateTrends = async (force = false) => {
     if (!catalog.length) { alert("Sincronizează catalogul mai întâi (tab 📂 Sync)"); return; }
     const today = new Date().toISOString().slice(0,10);
     if (!force && trendsDate === today && trends) return;
     await new Promise(resolve => setTimeout(resolve, 2000));
-    setLoading(true); setLoadMsg("Analizez catalogul — top 20 produse pentru azi...");
+    setLoading(true); setLoadMsg("Analizez catalogul — top 10 produse pentru azi...");
     const inStock = catalog.filter(p => p.stoc === "instock");
     const sampleSize = Math.min(50, inStock.length);
     const shuffled = [...inStock];
@@ -411,7 +490,7 @@ export default function EcoBitesHub() {
 Ești un copywriter profesionist pentru social media, specializat în produse naturiste în România. Scrii postări prietenoase, calde, pline de emoji-uri și informații utile.
 
 Luna curentă: ${month}.${trendsContext}
-Analizează catalogul și selectează EXACT 20 produse cu cel mai mare potențial de vânzare acum.
+Analizează catalogul și selectează EXACT 10 produse cu cel mai mare potențial de vânzare acum.
 
 Pentru fiecare produs, oferă:
 - nume: exact cum apare în catalog
@@ -449,7 +528,10 @@ ${sampleText}`;
         setTrendHistory(newHistory);
         localStorage.setItem("eb_trends_history", JSON.stringify(newHistory));
       }
-    } catch (e) { alert("Eroare trends: " + e.message); }
+    } catch (e) {
+      console.error(e);
+      alert("Eroare trends: " + (e.message || e.toString()));
+    }
     setLoading(false); setLoadMsg("");
   };
 
@@ -640,7 +722,7 @@ Răspunde în limba română, cu text clar, fără markdown inutil.`;
     </div>
   ) : null;
 
-  // CSS (identic cu cel anterior)
+  // CSS
   const css = `
     @import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..60,600;12..60,700&family=DM+Sans:wght@300;400;500&display=swap');
     *{box-sizing:border-box;margin:0;padding:0;}
@@ -671,7 +753,7 @@ Răspunde în limba română, cu text clar, fără markdown inutil.`;
     input[type=range]{accent-color:${C.accent};width:100%;cursor:pointer}
   `;
 
-  // SettingsModal (conține toate opțiunile – prescurtat pentru a nu depăși limita, dar complet)
+  // SettingsModal
   const SettingsModal = () => (
     <div className="overlay" onClick={e => e.target===e.currentTarget && setShowSettings(false)}>
       <div className="modal">
@@ -737,7 +819,7 @@ Răspunde în limba română, cu text clar, fără markdown inutil.`;
     </div>
   );
 
-  // Funcția de testare OpenRouter (necesară)
+  // Funcția de testare OpenRouter
   const testOpenRouterModels = async () => {
     if (!orKey) { alert("Adaugă cheia OpenRouter în setări înainte de test."); return; }
     setTestingModels(true);
@@ -767,7 +849,7 @@ Răspunde în limba română, cu text clar, fără markdown inutil.`;
     if (active.length > 0 && !active.includes(orModel) && !orCustom) setOrModel(active[0]);
   };
 
-  // Tutorial adTutorial (prescurtat)
+  // Tutorial adTutorial
   const adTutorial = () => {
     const iList = targeting.interests.length ? targeting.interests.slice(0,5).join(", ") : "produse naturale, alimentație bio, sănătate & wellness";
     const gLabel = {all:"Toate genurile",female:"Femei",male:"Bărbați"}[targeting.gender];
@@ -851,14 +933,14 @@ Răspunde în limba română, cu text clar, fără markdown inutil.`;
             </div>
             <div style={{ borderTop: `1px solid ${C.border}`, margin: "16px auto", width: "80%" }} />
             <div>
-              <div style={{ fontWeight: 600, marginBottom: 8, color: C.sub }}>📁 Încărcare manuală (CSV)</div>
-              <input type="file" accept=".csv" onChange={handleManualUpload} style={{ display: "none" }} id="csv-upload-input" />
+              <div style={{ fontWeight: 600, marginBottom: 8, color: C.sub }}>📁 Încărcare manuală (CSV, XLSX, XLS)</div>
+              <input type="file" accept=".csv,.xlsx,.xls" onChange={handleManualUpload} style={{ display: "none" }} id="csv-upload-input" />
               <label htmlFor="csv-upload-input" style={{ display: "inline-block", background: C.accentDim, border: `1px solid ${C.accentBorder}`, padding: "10px 22px", borderRadius: 9, cursor: "pointer", fontSize: 14, fontWeight: 600, color: C.accent, transition: "all 0.2s" }}
                 onMouseEnter={e => e.currentTarget.style.background = "rgba(110,231,183,0.2)"}
                 onMouseLeave={e => e.currentTarget.style.background = C.accentDim}>
-                📂 Alege fișier CSV
+                📂 Alege fișier
               </label>
-              <div style={{ fontSize: 12, color: C.muted, marginTop: 10 }}>Fișierul trebuie să aibă coloanele: <strong>Denumire, Pret, Stoc, Link, Poza, Descriere</strong><br/>(separator virgulă)</div>
+              <div style={{ fontSize: 12, color: C.muted, marginTop: 10 }}>Suportă <strong>CSV, Excel (.xlsx, .xls)</strong> cu coloanele: Denumire, Pret, Stoc, Link, Poza, Descriere (în orice ordine).</div>
             </div>
             {catalog.length > 0 && (
               <div style={{ marginTop: 32, display: "inline-flex", gap: 20, padding: "14px 24px", background: C.accentDim, border: `1px solid ${C.accentBorder}`, borderRadius: 12 }}>
@@ -874,13 +956,14 @@ Răspunde în limba română, cu text clar, fără markdown inutil.`;
         {tab === "trends" && (
           <div>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20, flexWrap:"wrap", gap:12 }}>
-              <div><h2 style={{ fontFamily:"'Bricolage Grotesque'", fontSize:19, marginBottom:4 }}>🔥 Top 20 Produse pentru Azi</h2><p style={{ color:C.muted, fontSize:13 }}>Analiză bazată pe sezonalitate și tendințe Google · {catalog.length} produse în catalog{trendsDate===new Date().toISOString().slice(0,10) && <span style={{ color:C.accent, marginLeft:8 }}>✓ actualizat azi</span>}</p></div>
+              <div><h2 style={{ fontFamily:"'Bricolage Grotesque'", fontSize:19, marginBottom:4 }}>🔥 Top 10 Produse pentru Azi</h2><p style={{ color:C.muted, fontSize:13 }}>Analiză bazată pe sezonalitate și tendințe Google · {catalog.length} produse în catalog{trendsDate===new Date().toISOString().slice(0,10) && <span style={{ color:C.accent, marginLeft:8 }}>✓ actualizat azi</span>}</p></div>
               <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
                 <button className="btn-s btn-sm" onClick={fetchGoogleTrends} disabled={loading}>📈 Încarcă tendințe Google</button>
                 <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:12, color:C.muted }}><input type="checkbox" checked={useGoogleTrends} onChange={e => setUseGoogleTrends(e.target.checked)} /> Folosește tendințe în AI</label>
                 {trends && <button className="btn-s btn-sm" onClick={() => generateTrends(true)}>🔄 Refresh</button>}
                 <button className="btn-p btn-sm" onClick={() => generateTrends()} disabled={!catalog.length}>🪄 Generează recomandări</button>
                 <button className="btn-s btn-sm" onClick={() => { const cached = lsGet("eb_trends"); const cachedDate = localStorage.getItem("eb_trends_date"); if (cached && cachedDate === new Date().toISOString().slice(0,10)) { setTrends(cached); setTrendsDate(cachedDate); alert("Încărcat din cache."); } else alert("Nu există cache pentru azi."); }}>💾 Folosește cache</button>
+                <button className="btn-s btn-sm" onClick={() => { localStorage.removeItem("eb_trends"); localStorage.removeItem("eb_trends_date"); setTrends(null); setTrendsDate(""); alert("Cache-ul pentru azi a fost șters. Apasă 'Generează recomandări' pentru a genera noi trenduri."); }}>🗑️ Șterge cache azi</button>
               </div>
             </div>
             {googleTrends && googleTrends.length > 0 && <div style={{ background:C.accentDim, borderRadius:8, padding:"8px 12px", marginBottom:16, fontSize:12 }}>📊 Tendințe Google azi: {googleTrends.slice(0,5).join(" · ")}</div>}
@@ -947,7 +1030,7 @@ Răspunde în limba română, cu text clar, fără markdown inutil.`;
           </div>
         )}
 
-        {/* META ADS TAB – prescurtat, dar complet */}
+        {/* META ADS TAB */}
         {tab === "ads" && (
           <div>
             <div style={{ display:"flex", gap:6, marginBottom:26 }}>
@@ -1021,134 +1104,109 @@ Răspunde în limba română, cu text clar, fără markdown inutil.`;
 
         {/* NEWSLETTER TAB */}
         {tab === "newsletter" && (
-  <div>
-    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20, flexWrap:"wrap", gap:12 }}>
-      <div>
-        <h2 style={{ fontFamily:"'Bricolage Grotesque'", fontSize:19, marginBottom:4 }}>✉️ Generator Newsletter</h2>
-        <p style={{ color:C.muted, fontSize:13 }}>Selectează până la 15 produse – AI-ul va scrie un newsletter care le include pe toate (3 variante).</p>
-      </div>
-      <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
-        <div style={{ width: 300 }}>
-          <input className="field" placeholder="Caută produs..." value={newsletterSearch} onChange={e => setNewsletterSearch(e.target.value)} style={{ marginBottom: 8 }} />
-          <select multiple size={5} className="field" style={{ minWidth:220, maxHeight:150 }} value={newsletterProducts.map(p => p.name)} onChange={e => {
-            const selectedNames = Array.from(e.target.selectedOptions, opt => opt.value);
-            const selected = catalog.filter(p => selectedNames.includes(p.name)).slice(0,15);
-            setNewsletterProducts(selected);
-          }}>
-            {catalog.filter(p => p.name.toLowerCase().includes(newsletterSearch.toLowerCase())).map(p => (
-              <option key={p.name} value={p.name}>{p.name}</option>
-            ))}
-          </select>
-        </div>
-        <button className="btn-p" onClick={() => generateNewsletterMulti(newsletterProducts)}>✉️ Generează 3 variante</button>
-      </div>
-    </div>
-    {newsletterProducts.length > 0 && (
-      <div style={{ marginBottom:12, padding:"8px 12px", background:C.accentDim, borderRadius:8, fontSize:13 }}>
-        ✅ {newsletterProducts.length} produse selectate: {newsletterProducts.map(p => p.name).join(", ")}
-      </div>
-    )}
-    {!newsletterOut.length && newsletterProducts.length === 0 && <div className="card" style={{ textAlign:"center", color:C.muted, padding:44 }}>Selectează produse și apasă Generează</div>}
-    {newsletterOut.map((item, i) => {
-      const full = `📧 Subiect: ${item.subiect}\n📌 Pre-header: ${item.pre_header}\n\n${item.corp}\n\n→ ${item.cta}\n🔗 Link-uri: ${newsletterProducts.map(p => p.link).join(", ")}`;
-      return (
-        <div key={i} className="card" style={{ marginBottom:12 }}>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}><span style={{ fontWeight:600, fontSize:14 }}>Varianta {i+1}</span><CopyBtn text={full} id={`nl-all-${i}`} /></div>
-          {[["📧 Subiect",item.subiect],["📌 Pre-header",item.pre_header],["Corp email",item.corp],["CTA",item.cta]].map(([lbl,val]) => (
-            <div key={lbl} style={{ marginBottom:12 }}>
-              <div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:.5, marginBottom:4 }}>{lbl}</div>
-              <div style={{ display:"flex", justifyContent:"space-between", gap:10 }}><div style={{ fontSize:14, color:C.sub, lineHeight:1.6 }}>{val}</div><CopyBtn text={val} id={`nl-${i}-${lbl}`} /></div>
+          <div>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20, flexWrap:"wrap", gap:12 }}>
+              <div><h2 style={{ fontFamily:"'Bricolage Grotesque'", fontSize:19, marginBottom:4 }}>✉️ Generator Newsletter</h2><p style={{ color:C.muted, fontSize:13 }}>Selectează până la 15 produse – AI-ul va scrie un newsletter care le include pe toate (3 variante).</p></div>
+              <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+                <div style={{ width: 300 }}>
+                  <input className="field" placeholder="Caută produs..." value={newsletterSearch} onChange={e => setNewsletterSearch(e.target.value)} style={{ marginBottom: 8 }} />
+                  <select multiple size={5} className="field" style={{ minWidth:220, maxHeight:150 }} value={newsletterProducts.map(p => p.name)} onChange={e => {
+                    const selectedNames = Array.from(e.target.selectedOptions, opt => opt.value);
+                    const selected = catalog.filter(p => selectedNames.includes(p.name)).slice(0,15);
+                    setNewsletterProducts(selected);
+                  }}>
+                    {catalog.filter(p => p.name.toLowerCase().includes(newsletterSearch.toLowerCase())).map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
+                  </select>
+                </div>
+                <button className="btn-p" onClick={() => generateNewsletterMulti(newsletterProducts)}>✉️ Generează 3 variante</button>
+              </div>
             </div>
-          ))}
-        </div>
-      );
-    })}
-  </div>
-)}
+            {newsletterProducts.length > 0 && <div style={{ marginBottom:12, padding:"8px 12px", background:C.accentDim, borderRadius:8, fontSize:13 }}>✅ {newsletterProducts.length} produse selectate: {newsletterProducts.map(p => p.name).join(", ")}</div>}
+            {newsletterOut.map((item, i) => {
+              const full = `📧 Subiect: ${item.subiect}\n📌 Pre-header: ${item.pre_header}\n\n${item.corp}\n\n→ ${item.cta}\n🔗 Link-uri: ${newsletterProducts.map(p => p.link).join(", ")}`;
+              return (
+                <div key={i} className="card" style={{ marginBottom:12 }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}><span style={{ fontWeight:600, fontSize:14 }}>Varianta {i+1}</span><CopyBtn text={full} id={`nl-all-${i}`} /></div>
+                  {[["📧 Subiect",item.subiect],["📌 Pre-header",item.pre_header],["Corp email",item.corp],["CTA",item.cta]].map(([lbl,val]) => (
+                    <div key={lbl} style={{ marginBottom:12 }}>
+                      <div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:.5, marginBottom:4 }}>{lbl}</div>
+                      <div style={{ display:"flex", justifyContent:"space-between", gap:10 }}><div style={{ fontSize:14, color:C.sub, lineHeight:1.6 }}>{val}</div><CopyBtn text={val} id={`nl-${i}-${lbl}`} /></div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         {/* CAROUSEL TAB */}
         {tab === "carousel" && (
-  <div>
-    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20, flexWrap:"wrap", gap:12 }}>
-      <div>
-        <h2 style={{ fontFamily:"'Bricolage Grotesque'", fontSize:19, marginBottom:4 }}>🎬 Carusel & Video Script</h2>
-        <p style={{ color:C.muted, fontSize:13 }}>Selectează până la 15 produse – AI-ul va genera script pentru carusel Instagram și Reels.</p>
-      </div>
-      <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
-        <div style={{ width: 300 }}>
-          <input className="field" placeholder="Caută produs..." value={carouselSearch} onChange={e => setCarouselSearch(e.target.value)} style={{ marginBottom: 8 }} />
-          <select multiple size={5} className="field" style={{ minWidth:220, maxHeight:150 }} value={carouselProducts.map(p => p.name)} onChange={e => {
-            const selectedNames = Array.from(e.target.selectedOptions, opt => opt.value);
-            const selected = catalog.filter(p => selectedNames.includes(p.name)).slice(0,15);
-            setCarouselProducts(selected);
-          }}>
-            {catalog.filter(p => p.name.toLowerCase().includes(carouselSearch.toLowerCase())).map(p => (
-              <option key={p.name} value={p.name}>{p.name}</option>
-            ))}
-          </select>
-        </div>
-        <button className="btn-p" onClick={() => generateCarouselMulti(carouselProducts)}>🎬 Generează</button>
-      </div>
-    </div>
-    {carouselProducts.length > 0 && (
-      <div style={{ marginBottom:12, padding:"8px 12px", background:C.accentDim, borderRadius:8, fontSize:13 }}>
-        ✅ {carouselProducts.length} produse selectate: {carouselProducts.map(p => p.name).join(", ")}
-      </div>
-    )}
-    {carouselOut && (
-      <div className="card">
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}><span style={{ fontWeight:600 }}>Script generat</span><CopyBtn text={carouselOut} id="carousel-all" /></div>
-        <pre style={{ whiteSpace:"pre-wrap", fontSize:14, lineHeight:1.75, color:C.sub, fontFamily:"inherit" }}>{carouselOut}</pre>
-        <button className="btn-s btn-sm" style={{ marginTop:16 }} onClick={() => generateCarouselMulti(carouselProducts)}>🔄 Regenerează</button>
-      </div>
-    )}
-  </div>
-)}
+          <div>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20, flexWrap:"wrap", gap:12 }}>
+              <div><h2 style={{ fontFamily:"'Bricolage Grotesque'", fontSize:19, marginBottom:4 }}>🎬 Carusel & Video Script</h2><p style={{ color:C.muted, fontSize:13 }}>Selectează până la 15 produse – AI-ul va genera script pentru carusel Instagram și Reels.</p></div>
+              <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+                <div style={{ width: 300 }}>
+                  <input className="field" placeholder="Caută produs..." value={carouselSearch} onChange={e => setCarouselSearch(e.target.value)} style={{ marginBottom: 8 }} />
+                  <select multiple size={5} className="field" style={{ minWidth:220, maxHeight:150 }} value={carouselProducts.map(p => p.name)} onChange={e => {
+                    const selectedNames = Array.from(e.target.selectedOptions, opt => opt.value);
+                    const selected = catalog.filter(p => selectedNames.includes(p.name)).slice(0,15);
+                    setCarouselProducts(selected);
+                  }}>
+                    {catalog.filter(p => p.name.toLowerCase().includes(carouselSearch.toLowerCase())).map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
+                  </select>
+                </div>
+                <button className="btn-p" onClick={() => generateCarouselMulti(carouselProducts)}>🎬 Generează</button>
+              </div>
+            </div>
+            {carouselProducts.length > 0 && <div style={{ marginBottom:12, padding:"8px 12px", background:C.accentDim, borderRadius:8, fontSize:13 }}>✅ {carouselProducts.length} produse selectate: {carouselProducts.map(p => p.name).join(", ")}</div>}
+            {carouselOut && (
+              <div className="card">
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}><span style={{ fontWeight:600 }}>Script generat</span><CopyBtn text={carouselOut} id="carousel-all" /></div>
+                <pre style={{ whiteSpace:"pre-wrap", fontSize:14, lineHeight:1.75, color:C.sub, fontFamily:"inherit" }}>{carouselOut}</pre>
+                <button className="btn-s btn-sm" style={{ marginTop:16 }} onClick={() => generateCarouselMulti(carouselProducts)}>🔄 Regenerează</button>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* BLOG TAB */}
         {tab === "blog" && (
-  <div>
-    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20, flexWrap:"wrap", gap:12 }}>
-      <div>
-        <h2 style={{ fontFamily:"'Bricolage Grotesque'", fontSize:19, marginBottom:4 }}>✍️ Generator Blog — Gomag</h2>
-        <p style={{ color:C.muted, fontSize:13 }}>Selectează până la 15 produse – AI-ul va scrie un articol SEO complet.</p>
-      </div>
-      <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
-        <div style={{ width: 300 }}>
-          <input className="field" placeholder="Caută produs..." value={blogSearch} onChange={e => setBlogSearch(e.target.value)} style={{ marginBottom: 8 }} />
-          <select multiple size={5} className="field" style={{ minWidth:220, maxHeight:150 }} value={blogProducts.map(p => p.name)} onChange={e => {
-            const selectedNames = Array.from(e.target.selectedOptions, opt => opt.value);
-            const selected = catalog.filter(p => selectedNames.includes(p.name)).slice(0,15);
-            setBlogProducts(selected);
-          }}>
-            {catalog.filter(p => p.name.toLowerCase().includes(blogSearch.toLowerCase())).map(p => (
-              <option key={p.name} value={p.name}>{p.name}</option>
-            ))}
-          </select>
-        </div>
-        <button className="btn-p" onClick={() => generateBlogMulti(blogProducts)}>✍️ Generează articol</button>
-      </div>
-    </div>
-    {blogProducts.length > 0 && (
-      <div style={{ marginBottom:12, padding:"8px 12px", background:C.accentDim, borderRadius:8, fontSize:13 }}>
-        ✅ {blogProducts.length} produse selectate: {blogProducts.map(p => p.name).join(", ")}
-      </div>
-    )}
-    {blogOut && (
-      <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-        {["titlu","seo_url","seo_titlu","meta_desc","tags","link_produs"].map(f => (
-          <div key={f} className="card" style={{ padding:"14px 18px" }}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}><div><div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:.5 }}>{f}</div></div><CopyBtn text={String(blogOut[f]||"")} id={`blog-${f}`} /></div>
-            <div style={{ fontSize:14, color:C.sub, lineHeight:1.6, background:"#0a0a1a", padding:"9px 12px", borderRadius:8 }}>{String(blogOut[f]||"")}</div>
+          <div>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20, flexWrap:"wrap", gap:12 }}>
+              <div><h2 style={{ fontFamily:"'Bricolage Grotesque'", fontSize:19, marginBottom:4 }}>✍️ Generator Blog — Gomag</h2><p style={{ color:C.muted, fontSize:13 }}>Selectează până la 15 produse – AI-ul va scrie un articol SEO complet.</p></div>
+              <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+                <div style={{ width: 300 }}>
+                  <input className="field" placeholder="Caută produs..." value={blogSearch} onChange={e => setBlogSearch(e.target.value)} style={{ marginBottom: 8 }} />
+                  <select multiple size={5} className="field" style={{ minWidth:220, maxHeight:150 }} value={blogProducts.map(p => p.name)} onChange={e => {
+                    const selectedNames = Array.from(e.target.selectedOptions, opt => opt.value);
+                    const selected = catalog.filter(p => selectedNames.includes(p.name)).slice(0,15);
+                    setBlogProducts(selected);
+                  }}>
+                    {catalog.filter(p => p.name.toLowerCase().includes(blogSearch.toLowerCase())).map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
+                  </select>
+                </div>
+                <button className="btn-p" onClick={() => generateBlogMulti(blogProducts)}>✍️ Generează articol</button>
+              </div>
+            </div>
+            {blogProducts.length > 0 && <div style={{ marginBottom:12, padding:"8px 12px", background:C.accentDim, borderRadius:8, fontSize:13 }}>✅ {blogProducts.length} produse selectate: {blogProducts.map(p => p.name).join(", ")}</div>}
+            {blogOut && (
+              <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                {["titlu","seo_url","seo_titlu","meta_desc","tags","link_produs"].map(f => (
+                  <div key={f} className="card" style={{ padding:"14px 18px" }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}><div><div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:.5 }}>{f}</div></div><CopyBtn text={String(blogOut[f]||"")} id={`blog-${f}`} /></div>
+                    <div style={{ fontSize:14, color:C.sub, lineHeight:1.6, background:"#0a0a1a", padding:"9px 12px", borderRadius:8 }}>{String(blogOut[f]||"")}</div>
+                  </div>
+                ))}
+                <div className="card" style={{ padding:"14px 18px" }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}><div><div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:.5 }}>Conținut HTML</div></div><CopyBtn text={String(blogOut.continut_html||"")} id="blog-html" /></div>
+                  <div style={{ fontSize:13, color:C.sub, lineHeight:1.7, background:"#0a0a1a", padding:"12px 14px", borderRadius:8, maxHeight:280, overflowY:"auto", fontFamily:"monospace", wordBreak:"break-word" }}>{blogOut.continut_html}</div>
+                </div>
+                <button className="btn-s btn-sm" onClick={() => generateBlogMulti(blogProducts)}>🔄 Regenerează articol</button>
+              </div>
+            )}
           </div>
-        ))}
-        <div className="card" style={{ padding:"14px 18px" }}>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}><div><div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:.5 }}>Conținut HTML</div></div><CopyBtn text={String(blogOut.continut_html||"")} id="blog-html" /></div>
-          <div style={{ fontSize:13, color:C.sub, lineHeight:1.7, background:"#0a0a1a", padding:"12px 14px", borderRadius:8, maxHeight:280, overflowY:"auto", fontFamily:"monospace", wordBreak:"break-word" }}>{blogOut.continut_html}</div>
-        </div>
-        <button className="btn-s btn-sm" onClick={() => generateBlogMulti(blogProducts)}>🔄 Regenerează articol</button>
-      </div>
-    )}
-  </div>
-)}
+        )}
+
         {/* BUFFER TAB */}
         {tab === "buffer" && (
           <div>
