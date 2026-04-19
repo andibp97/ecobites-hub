@@ -751,6 +751,33 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
   };
 
   // UI helpers
+  const resetCache = (what = "all") => {
+    const labels = {
+      trends:  "trendurile de azi",
+      catalog: "catalogul sincronizat",
+      all:     "tot cache-ul (catalog + trenduri + istoric)",
+    };
+    if (!window.confirm(`Ștergi ${labels[what]}?\nAplicația va regenera datele la următoarea acțiune.`)) return;
+
+    if (what === "trends" || what === "all") {
+      localStorage.removeItem("eb_trends");
+      localStorage.removeItem("eb_trends_date");
+      localStorage.removeItem("eb_trends_history");
+      localStorage.removeItem("eb_post_performance");
+      setTrends(null);
+      setTrendsDate("");
+      setTrendHistory([]);
+    }
+    if (what === "catalog" || what === "all") {
+      localStorage.removeItem("eb_catalog");
+      localStorage.removeItem("eb_catalog_date");
+      localStorage.removeItem("eb_active_free_models");
+      setCatalog([]);
+      setCatalogDate("");
+      setActiveFreeModels([]);
+    }
+  };
+
   const copyText = (text, id) => {
     // ReactGA.event({ category: "User", action: "copy", label: id });
     navigator.clipboard.writeText(text).then(() => { setCopied(id); setTimeout(() => setCopied(null), 2100); });
@@ -1017,6 +1044,8 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
             </div>
           </div>
           <button className="icon-btn" onClick={() => setShowSettings(true)}>⚙️ Setări</button>
+          <button className="icon-btn" onClick={() => resetCache("trends")} title="Resetează trendurile de azi" style={{ fontSize:13 }}>🔥 Reset</button>
+          <button className="icon-btn" onClick={() => resetCache("all")} title="Șterge tot cache-ul" style={{ fontSize:13 }}>🗑️ Cache</button>
         </div>
 
         {/* TABS */}
