@@ -119,6 +119,7 @@ export default function EcoBitesHub() {
   const [trends,       setTrends]       = useState(() => lsGet("eb_trends")    || null);
   const [trendsDate,   setTrendsDate]   = useState(() => localStorage.getItem("eb_trends_date") || "");
   const [googleTrends, setGoogleTrends] = useState(null);
+  const [selProd, setSelProd] = useState(null);
   const [useGoogleTrends, setUseGoogleTrends] = useState(true);
   const [trendHistory, setTrendHistory] = useState(() => {
     const hist = localStorage.getItem("eb_trends_history");
