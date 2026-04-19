@@ -1,6 +1,4 @@
 import { useState, useRef, useEffect } from "react";
-// import ReactGA from "react-ga4";   // șterge sau comentează
-import * as XLSX from "xlsx";
 
 // ─── Config ───────────────────────────────────────────────────────────
 const LS_KEY = "ecobites_hub_v4";
@@ -23,6 +21,7 @@ const TABS = [
   { id: "buffer",     label: "📤 Buffer"       },
   { id: "manual",     label: "✏️ Manual & Editor" },
   { id: "reports",    label: "📊 Rapoarte"     },
+  { id: "general",    label: "✍️ Conținut general" },
 ];
 
 const OBJECTIVES = [
@@ -39,30 +38,21 @@ const INTERESTS = [
   "Remedii naturiste","Superalimente","Apicultură","Ayurveda",
 ];
 
-// Modele OpenRouter (gratuite + plătite)
+// Modele OpenRouter (gratuite + plătite) – păstrate pentru compatibilitate
 const OR_MODELS = [
-  { id:"nvidia/nemotron-3-super-120b-a12b:free",        label:"Nemotron 3 Super 120B",   tag:"FREE" },
-  { id:"z-ai/glm-4.5-air:free",                        label:"GLM 4.5 Air",            tag:"FREE" },
-  { id:"openai/gpt-oss-120b:free",                     label:"GPT-OSS 120B",           tag:"FREE" },
-  { id:"nvidia/nemotron-3-nano-30b-a3b:free",          label:"Nemotron 3 Nano 30B",    tag:"FREE" },
-  { id:"minimax/minimax-m2.5:free",                    label:"MiniMax M2.5",           tag:"FREE" },
-  { id:"nvidia/nemotron-nano-9b-v2:free",              label:"Nemotron Nano 9B",       tag:"FREE" },
-  { id:"google/gemma-4-31b-it:free",                   label:"Gemma 4 31B",            tag:"FREE" },
-  { id:"nvidia/nemotron-nano-12b-v2-vl:free",          label:"Nemotron Nano 12B VL",   tag:"FREE" },
-  { id:"google/gemma-4-26b-a4b-it:free",               label:"Gemma 4 26B",            tag:"FREE" },
-  { id:"openai/gpt-oss-20b:free",                      label:"GPT-OSS 20B",            tag:"FREE" },
-  { id:"meta-llama/llama-3.3-70b-instruct:free",       label:"Llama 3.3 70B",          tag:"FREE" },
-  { id:"qwen/qwen3-next-80b-a3b-instruct:free",        label:"Qwen3 Next 80B",         tag:"FREE" },
-  { id:"google/gemma-3-27b-it:free",                   label:"Gemma 3 27B",            tag:"FREE" },
-  { id:"cognitivecomputations/dolphin-mistral-24b-venice-edition:free", label:"Dolphin Mistral 24B", tag:"FREE" },
-  { id:"nousresearch/hermes-3-llama-3.1-405b:free",    label:"Hermes 3 405B",          tag:"FREE" },
-  { id:"meta-llama/llama-3.2-3b-instruct:free",        label:"Llama 3.2 3B",           tag:"FREE" },
-  { id:"google/gemma-3-4b-it:free",                    label:"Gemma 3 4B",             tag:"FREE" },
-  { id:"google/gemma-3-12b-it:free",                   label:"Gemma 3 12B",            tag:"FREE" },
-  { id:"google/gemma-3n-e2b-it:free",                  label:"Gemma 3n E2B",           tag:"FREE" },
-  { id:"google/gemma-3n-e4b-it:free",                  label:"Gemma 3n E4B",           tag:"FREE" },
-  { id:"deepseek/deepseek-chat",                       label:"DeepSeek Chat (paid)",    tag:"CHEAP" },
-  { id:"openai/gpt-4o-mini",                           label:"GPT-4o Mini (paid)",      tag:"CHEAP" },
+  { id:"google/gemma-4-31b-it:free",              label:"Gemma 4 31B (free)",      tag:"FREE"  },
+  { id:"deepseek/deepseek-chat",                  label:"DeepSeek Chat",           tag:"CHEAP" },
+  { id:"meta-llama/llama-3.3-70b-instruct",       label:"Llama 3.3 70B",           tag:"CHEAP" },
+  { id:"anthropic/claude-haiku-4-5",              label:"Claude Haiku 4.5",        tag:"CHEAP" },
+  { id:"openai/gpt-4o-mini",                      label:"GPT-4o Mini",             tag:"CHEAP" },
+  { id:"mistralai/mistral-small-3.1-24b-instruct",label:"Mistral Small 3.1",       tag:"CHEAP" },
+];
+
+// Modele OpenAI directe
+const OPENAI_MODELS = [
+  { id: "gpt-4o-mini", label: "GPT-4o Mini (recomandat, ieftin)", tag: "CHEAP" },
+  { id: "gpt-4o", label: "GPT-4o (performant, mai scump)", tag: "CHEAP" },
+  { id: "gpt-3.5-turbo", label: "GPT-3.5 Turbo (cel mai ieftin)", tag: "CHEAP" },
 ];
 
 // Helpers
@@ -74,23 +64,11 @@ function lsSet(k, v)  { try { localStorage.setItem(k, JSON.stringify(v)); } catc
 export default function EcoBitesHub() {
   const saved = loadCfg();
 
-  // Inițializare Google Analytics
-// useEffect(() => {
-//   if (import.meta.env.VITE_GA_MEASUREMENT_ID) {
-//     ReactGA.initialize(import.meta.env.VITE_GA_MEASUREMENT_ID);
-//   } else {
-//     console.warn("GA Measurement ID not set");
-//   }
-// }, []);
-
-  // Trimite page view la schimbarea tab-ului
-// useEffect(() => {
-//   ReactGA.send({ hitType: "pageview", page: tab });
-// }, [tab]);
-
   // ── Settings state ──────────────────────────────────────────────────
   const [showSettings, setShowSettings] = useState(false);
-  const [provider,     setProvider]     = useState(saved.provider    || "openrouter");
+  const [provider,     setProvider]     = useState(saved.provider    || "openai");
+  const [openaiKey,    setOpenaiKey]    = useState(saved.openaiKey   || "");
+  const [openaiModel,  setOpenaiModel]  = useState(saved.openaiModel || "gpt-4o-mini");
   const [geminiKey,    setGeminiKey]    = useState(saved.geminiKey   || "");
   const [geminiModel,  setGeminiModel]  = useState(saved.geminiModel || "gemini-2.0-flash");
   const [orKey,        setOrKey]        = useState(saved.orKey       || "");
@@ -121,6 +99,11 @@ export default function EcoBitesHub() {
   const [selectedProducts, setSelectedProducts] = useState([]);
   const [editedPosts, setEditedPosts] = useState({});
   const [filter, setFilter] = useState("");
+
+  // General content
+  const [generalTopic, setGeneralTopic] = useState("");
+  const [generalContentType, setGeneralContentType] = useState("blog");
+  const [generalResult, setGeneralResult] = useState("");
 
   // App state
   const [tab,          setTab]          = useState("sync");
@@ -156,7 +139,6 @@ export default function EcoBitesHub() {
   const [newsletterOut, setNewsletterOut] = useState([]);
   const [carouselOut,   setCarouselOut]   = useState("");
   const [blogOut,       setBlogOut]       = useState(null);
-  const [selProd,       setSelProd]       = useState(null);
   const [bufferStatus,  setBufferStatus]  = useState("");
 
   // OpenRouter testing
@@ -172,12 +154,12 @@ export default function EcoBitesHub() {
   // Save settings
   useEffect(() => {
     saveCfg({
-      provider, geminiKey, geminiModel, orKey, orModel, orCustom, hfKey, hfModel,
+      provider, openaiKey, openaiModel, geminiKey, geminiModel, orKey, orModel, orCustom, hfKey, hfModel,
       feedUrl, bufferKey, priceMin, priceMax, sheetWebAppUrl,
       brandDescription, brandValues, brandLinks, postTone, useEmoji, includeBrandText, defaultHashtags,
       templates
     });
-  }, [provider, geminiKey, geminiModel, orKey, orModel, orCustom, hfKey, hfModel,
+  }, [provider, openaiKey, openaiModel, geminiKey, geminiModel, orKey, orModel, orCustom, hfKey, hfModel,
       feedUrl, bufferKey, priceMin, priceMax, sheetWebAppUrl,
       brandDescription, brandValues, brandLinks, postTone, useEmoji, includeBrandText, defaultHashtags,
       templates]);
@@ -190,6 +172,7 @@ export default function EcoBitesHub() {
   const productValid   = adProd.name && adProd.price && adProd.link;
 
   const providerBadge = {
+    openai:     `OpenAI · ${openaiModel}`,
     anthropic:  "Claude Sonnet (artifact)",
     gemini:     `Gemini · ${geminiModel === "gemini-2.5-flash" ? "2.5 Flash" : "2.0 Flash"}`,
     openrouter: `OR · ${activeOrModel.split("/")[1]?.split(":")[0] || activeOrModel}`,
@@ -197,6 +180,26 @@ export default function EcoBitesHub() {
   }[provider] || provider;
 
   // ── AI callers ───────────────────────────────────────────────────────
+  const callOpenAI = async (prompt) => {
+    if (!openaiKey) throw new Error("Lipsă cheie OpenAI — adaugă în ⚙️ Setări");
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${openaiKey}`
+      },
+      body: JSON.stringify({
+        model: openaiModel,
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.7,
+        max_tokens: 4096
+      })
+    });
+    const d = await res.json();
+    if (d.error) throw new Error(d.error.message);
+    return d.choices[0].message.content;
+  };
+
   const callAnthropic = async (prompt) => {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method:"POST", headers:{"Content-Type":"application/json"},
@@ -261,53 +264,46 @@ export default function EcoBitesHub() {
     }
   };
 
-const callHF = async (prompt) => {
-  const res = await fetch('/api/hf-proxy', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      prompt: prompt,
-      model: hfModel,
-      max_tokens: 2048,
-      temperature: 0.7,
-    }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Eroare proxy HF');
-  return data.text;
-};
+  const callHF = async (prompt) => {
+    if (!hfKey) throw new Error("Lipsă cheie HuggingFace — adaugă în ⚙️ Setări");
+    const res = await fetch(`https://api-inference.huggingface.co/models/${hfModel}`, {
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${hfKey}`},
+      body: JSON.stringify({ inputs:prompt, parameters:{max_new_tokens:4096, temperature:0.7, return_full_text:false} }),
+    });
+    const d = await res.json();
+    if (d.error) throw new Error(d.error);
+    return Array.isArray(d) ? d[0]?.generated_text : d.generated_text;
+  };
 
   const callAI = async (prompt) => {
     switch (provider) {
-      case "anthropic":  return callAnthropic(prompt);
-      case "gemini":     return callGemini(prompt);
-      case "openrouter": return callOpenRouter(prompt);
+      case "openai":    return callOpenAI(prompt);
+      case "anthropic": return callAnthropic(prompt);
+      case "gemini":    return callGemini(prompt);
+      case "openrouter":return callOpenRouter(prompt);
       case "huggingface":return callHF(prompt);
       default: throw new Error("Provider neconfigurat");
     }
   };
 
-const callAIJson = async (prompt) => {
-  const raw = await callAI(prompt);
-  console.log("Răspuns brut de la AI:", raw);
-  // Încearcă să extragă JSON-ul dintre acolade
-  const match = raw.match(/\{[\s\S]*\}/);
-  if (!match) {
-    // Dacă nu găsește JSON, aruncă un error care include primele 200 caractere din răspuns
-    throw new Error(`AI nu a returnat JSON valid. Primele 200 caractere: ${raw.substring(0, 200)}`);
-  }
-  let jsonStr = match[0];
-  jsonStr = jsonStr.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-  return JSON.parse(jsonStr);
-};
+  const callAIJson = async (prompt) => {
+    const raw = await callAI(prompt);
+    console.log("Răspuns brut de la AI:", raw);
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error(`AI nu a returnat JSON valid. Primele 200 caractere: ${raw.substring(0, 200)}`);
+    let jsonStr = match[0];
+    jsonStr = jsonStr.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+    return JSON.parse(jsonStr);
+  };
 
-  const buildPromptWithBrand = (basePrompt, withHashtags = false) => {
+  const buildPromptWithBrand = (basePrompt) => {
     let brandContext = "";
     if (includeBrandText) {
       brandContext = `Despre brand: ${brandDescription}. Valori: ${brandValues}. Link-uri utile: ${brandLinks}\n`;
     }
     const toneContext = `Scrie într-un ton ${postTone}. ${useEmoji ? "Adaugă 3-4 emoji-uri potrivite." : "Nu folosi emoji-uri."}\n`;
-    const hashtagContext = withHashtags ? `La finalul postării pentru Instagram, adaugă aceste hashtag-uri: ${defaultHashtags}\n` : "";
+    const hashtagContext = `La finalul postării pentru Instagram, adaugă aceste hashtag-uri: ${defaultHashtags}\n`;
     return brandContext + toneContext + hashtagContext + basePrompt;
   };
 
@@ -332,7 +328,7 @@ const callAIJson = async (prompt) => {
     }
   };
 
-  // Catalog sync
+  // Catalog sync (adaptat coloanelor tale)
   const syncCatalog = async (force = false) => {
     if (!feedUrl) { alert("Adaugă URL-ul CSV în ⚙️ Setări"); return; }
     const today = new Date().toISOString().slice(0,10);
@@ -347,14 +343,15 @@ const callAIJson = async (prompt) => {
       const text = await res.text();
       const parsed = text.split("\n").slice(1).map(row => {
         const cols = row.match(/(".*?"|[^,]+)(?=\s*,|\s*$)/g)?.map(c => c.replace(/^"|"$/g,"").trim()) || [];
-        if (cols.length < 8) return null;
+        if (cols.length < 6) return null;
         const name = cols[0];
-        const price = parseFloat(cols[5].replace(',', '.'));
+        const price = parseFloat(cols[1].replace(',', '.'));
         if (isNaN(price) || price <= 0) return null;
-        const link = cols[7];
-        const img = cols[6];
-        const desc = (cols[3] + " " + cols[4]).trim();
-        return { name, price, stoc: "instock", link, img, desc };
+        const stoc = cols[2];
+        const link = cols[3];
+        const img = cols[4];
+        const desc = cols[5];
+        return { name, price, stoc, link, img, desc };
       }).filter(p => p && p.name);
       const filtered = parsed.filter(p => p.price >= priceMin && p.price <= priceMax);
       setCatalog(filtered); setCatalogDate(today);
@@ -365,24 +362,15 @@ const callAIJson = async (prompt) => {
   };
 
   const handleManualUpload = (event) => {
-  const file = event.target.files[0];
-  if (!file) return;
-  setLoading(true);
-  setLoadMsg("Procesez fișierul încărcat...");
-
-  const extension = file.name.split('.').pop().toLowerCase();
-  const reader = new FileReader();
-
-  reader.onload = (e) => {
-    try {
-      let data;
-      if (extension === 'csv') {
-        // Parsare CSV
+    const file = event.target.files[0];
+    if (!file) return;
+    setLoading(true);
+    setLoadMsg("Procesez fișierul încărcat...");
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
         const text = e.target.result;
-        const rows = text.split("\n");
-        const headers = rows[0].split(",").map(h => h.replace(/^"|"$/g, '').trim());
-        // Mă aștept la coloanele: Denumire, Pret, Stoc, Link, Poza, Descriere (în această ordine)
-        const parsed = rows.slice(1).map(row => {
+        const parsed = text.split("\n").slice(1).map(row => {
           const cols = row.match(/(".*?"|[^,]+)(?=\s*,|\s*$)/g)?.map(c => c.replace(/^"|"$/g, "").trim()) || [];
           if (cols.length < 6) return null;
           const name = cols[0];
@@ -394,103 +382,53 @@ const callAIJson = async (prompt) => {
           const desc = cols[5];
           return { name, price, stoc, link, img, desc };
         }).filter(p => p && p.name);
-        data = parsed;
-      } else {
-        // Parsare Excel (xlsx, xls)
-        const workbook = XLSX.read(e.target.result, { type: 'binary' });
-        const sheetName = workbook.SheetNames[0];
-        const sheet = workbook.Sheets[sheetName];
-        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
-        if (!rows || rows.length < 2) throw new Error("Fișierul nu conține date");
-        const headers = rows[0].map(cell => String(cell || "").trim());
-        // Indexăm coloanele după header (pentru flexibilitate)
-        const colIndex = {
-          Denumire: headers.findIndex(h => h.toLowerCase().includes("denumire") || h.toLowerCase() === "nume"),
-          Pret: headers.findIndex(h => h.toLowerCase().includes("pret")),
-          Stoc: headers.findIndex(h => h.toLowerCase().includes("stoc")),
-          Link: headers.findIndex(h => h.toLowerCase().includes("link") || h.toLowerCase() === "url"),
-          Poza: headers.findIndex(h => h.toLowerCase().includes("poza") || h.toLowerCase().includes("imagine")),
-          Descriere: headers.findIndex(h => h.toLowerCase().includes("descriere"))
-        };
-        // Dacă nu găsește după nume, folosește ordinea prestabilită (0,1,2,3,4,5)
-        if (colIndex.Denumire === -1) colIndex.Denumire = 0;
-        if (colIndex.Pret === -1) colIndex.Pret = 1;
-        if (colIndex.Stoc === -1) colIndex.Stoc = 2;
-        if (colIndex.Link === -1) colIndex.Link = 3;
-        if (colIndex.Poza === -1) colIndex.Poza = 4;
-        if (colIndex.Descriere === -1) colIndex.Descriere = 5;
-
-        const parsed = rows.slice(1).map(row => {
-          const name = row[colIndex.Denumire] ? String(row[colIndex.Denumire]).trim() : "";
-          if (!name) return null;
-          const price = parseFloat(String(row[colIndex.Pret] || "0").replace(',', '.'));
-          if (isNaN(price) || price <= 0) return null;
-          const stoc = row[colIndex.Stoc] ? String(row[colIndex.Stoc]).trim() : "";
-          const link = row[colIndex.Link] ? String(row[colIndex.Link]).trim() : "";
-          const img = row[colIndex.Poza] ? String(row[colIndex.Poza]).trim() : "";
-          const desc = row[colIndex.Descriere] ? String(row[colIndex.Descriere]).trim() : "";
-          return { name, price, stoc, link, img, desc };
-        }).filter(p => p);
-        data = parsed;
+        const filtered = parsed.filter(p => p.price >= priceMin && p.price <= priceMax);
+        const today = new Date().toISOString().slice(0, 10);
+        setCatalog(filtered);
+        setCatalogDate(today);
+        lsSet("eb_catalog", filtered);
+        localStorage.setItem("eb_catalog_date", today);
+        alert(`✅ Catalog încărcat cu succes: ${filtered.length} produse`);
+      } catch (err) {
+        alert("Eroare la parsarea fișierului CSV: " + err.message);
+      } finally {
+        setLoading(false);
+        setLoadMsg("");
       }
-
-      const filtered = data.filter(p => p.price >= priceMin && p.price <= priceMax);
-      const today = new Date().toISOString().slice(0, 10);
-      setCatalog(filtered);
-      setCatalogDate(today);
-      lsSet("eb_catalog", filtered);
-      localStorage.setItem("eb_catalog_date", today);
-      alert(`✅ Catalog încărcat cu succes: ${filtered.length} produse`);
-    } catch (err) {
-      console.error(err);
-      alert("Eroare la parsarea fișierului: " + err.message);
-    } finally {
+    };
+    reader.onerror = () => {
+      alert("Eroare la citirea fișierului");
       setLoading(false);
       setLoadMsg("");
-    }
-  };
-
-  reader.onerror = () => {
-    alert("Eroare la citirea fișierului");
-    setLoading(false);
-    setLoadMsg("");
-  };
-
-  if (extension === 'csv') {
+    };
     reader.readAsText(file, "UTF-8");
-  } else {
-    reader.readAsBinaryString(file);
-  }
-};
+  };
 
-  // Generate trends
-const generateTrends = async (force = false) => {
-  if (!catalog.length) { alert("Sincronizează catalogul mai întâi (tab 📂 Sync)"); return; }
-  const today = new Date().toISOString().slice(0,10);
-  if (!force && trendsDate === today && trends) return;
-  
-  await new Promise(resolve => setTimeout(resolve, 2000));
-  setLoading(true); setLoadMsg("Analizez catalogul — top 20 produse pentru azi...");
-  
-  // Selectează doar produsele în stoc și ia un eșantion aleator de maxim 50 (pentru a avea destule din care să aleagă AI-ul 20)
-  const inStock = catalog.filter(p => p.stoc === "instock");
-  const sampleSize = Math.min(50, inStock.length);
-  const shuffled = [...inStock];
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-  }
-  const sample = shuffled.slice(0, sampleSize);
-  
-  try {
-    const month = new Date().toLocaleString("ro-RO", {month:"long"});
-    let trendsContext = "";
-    if (useGoogleTrends && googleTrends && googleTrends.length) {
-      trendsContext = `\n\nTendințe Google în România astăzi (${today}):\n${googleTrends.slice(0,10).join(", ")}\n\nFolosește aceste subiecte populare pentru a selecta produsele relevante.`;
-    }
+  // Generate trends (optimizat: eșantion aleator, 20 produse, descrieri scurte)
+  const generateTrends = async (force = false) => {
+    if (!catalog.length) { alert("Sincronizează catalogul mai întâi (tab 📂 Sync)"); return; }
+    const today = new Date().toISOString().slice(0,10);
+    if (!force && trendsDate === today && trends) return;
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    setLoading(true); setLoadMsg("Analizez catalogul — top 20 produse pentru azi...");
     
-    const sampleText = sample.map(p=>`${p.name} | ${p.price} RON | ${p.desc.substring(0,40)}`).join("\n");
-    const basePrompt = `IMPORTANT: Răspunde EXCLUSIV cu JSON valid, compact (fără spații inutile). Începe direct cu { și termină cu }.
+    const inStock = catalog.filter(p => p.stoc === "instock");
+    const sampleSize = Math.min(50, inStock.length);
+    const shuffled = [...inStock];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    const sample = shuffled.slice(0, sampleSize);
+    
+    try {
+      const month = new Date().toLocaleString("ro-RO", {month:"long"});
+      let trendsContext = "";
+      if (useGoogleTrends && googleTrends && googleTrends.length) {
+        trendsContext = `\n\nTendințe Google în România astăzi (${today}):\n${googleTrends.slice(0,10).join(", ")}\n\nFolosește aceste subiecte populare pentru a selecta produsele relevante.`;
+      }
+      const sampleText = sample.map(p=>`${p.name} | ${p.price} RON | ${p.desc.substring(0,60)}`).join("\n");
+      const basePrompt = `IMPORTANT: Răspunde EXCLUSIV cu JSON valid, compact (fără spații inutile). Începe direct cu { și termină cu }.
 
 Ești un copywriter profesionist pentru social media, specializat în produse naturiste în România.
 Luna curentă: ${month}.${trendsContext}
@@ -519,22 +457,23 @@ Răspunde DOAR cu JSON compact în acest format:
 
 Catalog (nume | preț | descriere):
 ${sampleText}`;
-    const fullPrompt = buildPromptWithBrand(basePrompt);
-    const result = await callAIJson(fullPrompt);
-    if (result?.recomandari) {
-      setTrends(result.recomandari); setTrendsDate(today);
-      lsSet("eb_trends", result.recomandari);
-      localStorage.setItem("eb_trends_date", today);
-      const newHistory = [{ date: today, trends: result.recomandari }, ...trendHistory.filter(h => h.date !== today)].slice(0,30);
-      setTrendHistory(newHistory);
-      localStorage.setItem("eb_trends_history", JSON.stringify(newHistory));
+      const fullPrompt = buildPromptWithBrand(basePrompt);
+      const result = await callAIJson(fullPrompt);
+      if (result?.recomandari) {
+        setTrends(result.recomandari); setTrendsDate(today);
+        lsSet("eb_trends", result.recomandari);
+        localStorage.setItem("eb_trends_date", today);
+        const newHistory = [{ date: today, trends: result.recomandari }, ...trendHistory.filter(h => h.date !== today)].slice(0,30);
+        setTrendHistory(newHistory);
+        localStorage.setItem("eb_trends_history", JSON.stringify(newHistory));
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Eroare trends: " + (e.message || e.toString()));
     }
-  } catch (e) {
-    console.error(e);
-    alert("Eroare trends: " + (e.message || e.toString()));
-  }
-  setLoading(false); setLoadMsg("");
-};
+    setLoading(false); setLoadMsg("");
+  };
+
   // Generate hashtags with AI
   const generateHashtags = async (productName, productDesc) => {
     setLoading(true);
@@ -564,7 +503,6 @@ ${sampleText}`;
     if (!p.name) { alert("Completează detaliile produsului (Pasul 2)"); return; }
     setLoading(true); setLoadMsg("Generez texte reclame...");
     setAdCopy(a => ({...a, error:null}));
-    // ReactGA.event({ category: "AI", action: "generate_ad_copy", label: p.name });
     try {
       const objLabel = selectedObj?.label || "Trafic";
       const basePrompt = `Ești copywriter expert Meta Ads pentru piața din România. Generează 3 variante distincte de ad copy pentru Facebook/Instagram în română.
@@ -582,7 +520,7 @@ Reguli stricte:
 
 Răspunde EXCLUSIV în JSON valid, fără text suplimentar:
 {"variants":[{"headline":"...","primary_text":"...","cta":"..."},{"headline":"...","primary_text":"...","cta":"..."},{"headline":"...","primary_text":"...","cta":"..."}]}`;
-      const fullPrompt = buildPromptWithBrand(basePrompt, true);
+      const fullPrompt = buildPromptWithBrand(basePrompt);
       const result = await callAIJson(fullPrompt);
       setAdCopy({ variants:result.variants, selected:0, error:null });
     } catch (e) {
@@ -595,7 +533,6 @@ Răspunde EXCLUSIV în JSON valid, fără text suplimentar:
   const generateNewsletter = async (count = 2) => {
     if (!selProd) { alert("Selectează un produs din Trends sau catalog"); return; }
     setLoading(true); setLoadMsg(`Generez ${count} variante newsletter...`);
-    // ReactGA.event({ category: "AI", action: "generate_newsletter", label: selProd.name, value: count });
     try {
       const basePrompt = `Generează ${count} variante diferite de newsletter în română pentru produsul "${selProd.name}" (${selProd.price} RON).
 Descriere: ${selProd.desc}
@@ -615,7 +552,6 @@ Răspunde EXCLUSIV în JSON: {"variante":[{"subiect":"...","pre_header":"...","c
   const generateCarousel = async () => {
     if (!selProd) { alert("Selectează un produs"); return; }
     setLoading(true); setLoadMsg("Generez carusel și script video...");
-    // ReactGA.event({ category: "AI", action: "generate_carousel", label: selProd.name });
     try {
       const basePrompt = `Ești creator de conținut social media în România pentru produse naturiste. Creează pentru produsul "${selProd.name}" (${selProd.price} RON):
 
@@ -634,7 +570,7 @@ CTA 12-15s (max 35 caractere):
 Descriere produs: ${selProd.desc}
 
 Marchează clar secțiunile cu CARUSEL: și VIDEO:`;
-      const fullPrompt = buildPromptWithBrand(basePrompt, true);
+      const fullPrompt = buildPromptWithBrand(basePrompt);
       const result = await callAI(fullPrompt);
       setCarouselOut(result);
     } catch (e) { alert("Eroare: " + e.message); }
@@ -645,7 +581,6 @@ Marchează clar secțiunile cu CARUSEL: și VIDEO:`;
   const generateBlog = async () => {
     if (!selProd) { alert("Selectează un produs"); return; }
     setLoading(true); setLoadMsg("Generez articol blog SEO pentru Gomag...");
-    // ReactGA.event({ category: "AI", action: "generate_blog", label: selProd.name });
     try {
       const basePrompt = `Ești expert SEO pentru platforma Gomag. Scrie un articol de blog complet în română pentru "${selProd.name}".
 
@@ -736,7 +671,6 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
   // Buffer post (draft)
   const postToBuffer = async (text) => {
     if (!text) { alert("Nu există text de postat."); return; }
-    // ReactGA.event({ category: "Buffer", action: "post_draft", label: text.substring(0, 50) });
     try {
       const res = await fetch('/api/buffer-post', {
         method: 'POST',
@@ -746,47 +680,49 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
       const data = await res.json();
       if (res.ok) {
         alert('✅ Postare salvată ca draft în Buffer!');
-        // ReactGA.event({ category: "Buffer", action: "post_success" });
       } else {
         alert('❌ Eroare Buffer: ' + data.error);
-        // ReactGA.event({ category: "Buffer", action: "post_error", label: data.error });
       }
     } catch (err) {
       alert('Eroare de rețea: ' + err.message);
-      // ReactGA.event({ category: "Buffer", action: "post_network_error" });
+    }
+  };
+
+  // Generare conținut general pe un subiect
+  const generateGeneralContent = async () => {
+    if (!generalTopic.trim()) {
+      alert("Te rog să introduci un subiect.");
+      return;
+    }
+    setLoading(true);
+    setLoadMsg(`Generez conținut ${generalContentType} despre „${generalTopic}”...`);
+    try {
+      const relevantProducts = catalog.slice(0, 20).map(p => `${p.name} (${p.price} RON): ${p.desc.substring(0,80)}`).join("\n");
+      const promptType = generalContentType === "blog" 
+        ? "Scrie un articol de blog SEO optimizat, structurat cu titlu, introducere, subtitluri, concluzie."
+        : generalContentType === "newsletter"
+        ? "Scrie un newsletter captivant cu subiect, pre-header, corp și CTA."
+        : "Scrie o postare pentru social media (Facebook/Instagram) cu text atrăgător, hashtag-uri și emoji-uri.";
+      
+      const basePrompt = `Subiect: "${generalTopic}". ${promptType}
+Folosește un ton ${postTone}. ${useEmoji ? "Adaugă 3-4 emoji-uri." : "Nu folosi emoji-uri."}
+${includeBrandText ? `Menționează brandul: ${brandDescription}. Valori: ${brandValues}. Link: ${brandLinks}` : ""}
+Dacă este relevant, poți sugera produse din catalogul nostru:
+${relevantProducts}
+Răspunde în limba română, cu text clar, fără markdown inutil.`;
+      const fullPrompt = buildPromptWithBrand(basePrompt);
+      const result = await callAI(fullPrompt);
+      setGeneralResult(result);
+    } catch (err) {
+      alert("Eroare generare: " + err.message);
+    } finally {
+      setLoading(false);
+      setLoadMsg("");
     }
   };
 
   // UI helpers
-  const resetCache = (what = "all") => {
-    const labels = {
-      trends:  "trendurile de azi",
-      catalog: "catalogul sincronizat",
-      all:     "tot cache-ul (catalog + trenduri + istoric)",
-    };
-    if (!window.confirm(`Ștergi ${labels[what]}?\nAplicația va regenera datele la următoarea acțiune.`)) return;
-
-    if (what === "trends" || what === "all") {
-      localStorage.removeItem("eb_trends");
-      localStorage.removeItem("eb_trends_date");
-      localStorage.removeItem("eb_trends_history");
-      localStorage.removeItem("eb_post_performance");
-      setTrends(null);
-      setTrendsDate("");
-      setTrendHistory([]);
-    }
-    if (what === "catalog" || what === "all") {
-      localStorage.removeItem("eb_catalog");
-      localStorage.removeItem("eb_catalog_date");
-      localStorage.removeItem("eb_active_free_models");
-      setCatalog([]);
-      setCatalogDate("");
-      setActiveFreeModels([]);
-    }
-  };
-
   const copyText = (text, id) => {
-    // ReactGA.event({ category: "User", action: "copy", label: id });
     navigator.clipboard.writeText(text).then(() => { setCopied(id); setTimeout(() => setCopied(null), 2100); });
   };
   const CopyBtn = ({ text, id, style }) => (
@@ -849,7 +785,7 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
     input[type=range]{accent-color:${C.accent};width:100%;cursor:pointer}
   `;
 
-  // ── Settings Modal ────────────────────────────────────────────────────
+  // Settings Modal
   const SettingsModal = () => (
     <div className="overlay" onClick={e => e.target===e.currentTarget && setShowSettings(false)}>
       <div className="modal">
@@ -861,10 +797,11 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
           <div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:.5, marginBottom:10 }}>Provider AI</div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
             {[
-              { id:"anthropic",  label:"Claude Sonnet",  sub:"Fără key · via artifact"        },
-              { id:"gemini",     label:"Gemini Flash",   sub:"Key proprie · 1500 req/zi gratis" },
-              { id:"openrouter", label:"OpenRouter",     sub:"Multi-model · free & paid"       },
-              { id:"huggingface",label:"HuggingFace",    sub:"Open-source · orice model"       },
+              { id:"openai",    label:"OpenAI",       sub:"Direct API (GPT-4o-mini etc.)" },
+              { id:"anthropic", label:"Claude Sonnet",sub:"Fără key · via artifact"        },
+              { id:"gemini",    label:"Gemini Flash", sub:"Key proprie · 1500 req/zi gratis" },
+              { id:"openrouter",label:"OpenRouter",   sub:"Multi-model · free & paid"       },
+              { id:"huggingface",label:"HuggingFace", sub:"Open-source · orice model"       },
             ].map(p => (
               <div key={p.id} onClick={() => setProvider(p.id)}
                 style={{ padding:"11px 13px", borderRadius:10, border:`1px solid ${provider===p.id?C.accent:C.border}`, cursor:"pointer", background:provider===p.id?C.accentDim:C.card, transition:"all .2s" }}>
@@ -875,6 +812,21 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
           </div>
         </div>
         <div style={{ display:"flex", flexDirection:"column", gap:14, marginBottom:22 }}>
+          {provider === "openai" && (
+            <>
+              <div>
+                <label style={{ fontSize:12, color:C.muted, display:"block", marginBottom:6 }}>OpenAI API Key</label>
+                <input className="field" type={keysVisible?"text":"password"} placeholder="sk-..." value={openaiKey} onChange={e=>setOpenaiKey(e.target.value)} />
+                <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer" style={{ fontSize:11, color:C.accent, display:"block", marginTop:5 }}>→ Obții cheia de la OpenAI</a>
+              </div>
+              <div>
+                <label style={{ fontSize:12, color:C.muted, display:"block", marginBottom:6 }}>Model OpenAI</label>
+                <select className="field" value={openaiModel} onChange={e=>setOpenaiModel(e.target.value)}>
+                  {OPENAI_MODELS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+                </select>
+              </div>
+            </>
+          )}
           {provider === "gemini" && (
             <>
               <div>
@@ -895,10 +847,7 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
             <>
               <div>
                 <label style={{ fontSize:12, color:C.muted, display:"block", marginBottom:6 }}>OpenRouter API Key</label>
-                <div style={{ position:"relative" }}>
-                  <input className="field" type={keysVisible?"text":"password"} placeholder="sk-or-v1-..." value={orKey} onChange={e=>setOrKey(e.target.value)} style={{ paddingRight:44 }} />
-                  <button onClick={() => setKeysVisible(v=>!v)} style={{ position:"absolute", right:12, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", color:C.muted, cursor:"pointer", fontSize:14 }}>{keysVisible?"🙈":"👁️"}</button>
-                </div>
+                <input className="field" type={keysVisible?"text":"password"} placeholder="sk-or-v1-..." value={orKey} onChange={e=>setOrKey(e.target.value)} />
                 <a href="https://openrouter.ai/keys" target="_blank" rel="noreferrer" style={{ fontSize:11, color:C.accent, display:"block", marginTop:5 }}>→ openrouter.ai/keys</a>
               </div>
               <div>
@@ -949,30 +898,32 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
               </div>
             </>
           )}
+          {/* URL CSV Feed */}
           <div>
             <label style={{ fontSize:12, color:C.muted, display:"block", marginBottom:6 }}>🔗 URL CSV Feed (Google Drive)</label>
             <input className="field" placeholder="https://drive.google.com/uc?export=download&id=..." value={feedUrl} onChange={e=>setFeedUrl(e.target.value)} />
-            <div style={{ fontSize:11, color:C.muted, marginTop:5 }}>Link-ul direct de download al fișierului CSV generat de scriptul tău din Drive</div>
+            <div style={{ fontSize:11, color:C.muted, marginTop:5 }}>Link-ul direct de download al fișierului CSV</div>
           </div>
+          {/* Filtru preț */}
           <div>
             <label style={{ fontSize:12, color:C.muted, display:"block", marginBottom:6 }}>💰 Filtru preț (RON)</label>
             <div style={{ display:"flex", gap:8 }}>
               <input className="field" type="number" placeholder="Min" value={priceMin} onChange={e=>setPriceMin(Number(e.target.value))} style={{ width:"50%" }} />
               <input className="field" type="number" placeholder="Max" value={priceMax} onChange={e=>setPriceMax(Number(e.target.value))} style={{ width:"50%" }} />
             </div>
-            <div style={{ fontSize:11, color:C.muted, marginTop:5 }}>Produsele cu preț 0 sunt excluse automat.</div>
           </div>
+          {/* Buffer Access Token */}
           <div>
             <label style={{ fontSize:12, color:C.muted, display:"block", marginBottom:6 }}>📤 Buffer Access Token</label>
             <input className="field" type={keysVisible?"text":"password"} placeholder="1/xyz..." value={bufferKey} onChange={e=>setBufferKey(e.target.value)} />
             <div style={{ fontSize:11, color:C.muted, marginTop:5 }}>Din buffer.com → Settings → Apps → Access Token</div>
           </div>
+          {/* Google Sheets Web App URL */}
           <div>
             <label style={{ fontSize:12, color:C.muted, display:"block", marginBottom:6 }}>📊 Google Sheets Web App URL</label>
             <input className="field" placeholder="https://script.google.com/macros/s/.../exec" value={sheetWebAppUrl} onChange={e=>setSheetWebAppUrl(e.target.value)} />
-            <div style={{ fontSize:11, color:C.muted, marginTop:5 }}>Pentru a salva postările selectate. Creează un Apps Script în sheet-ul tău și deployează ca Web App.</div>
           </div>
-          {/* Brand Settings inline */}
+          {/* Brand Settings */}
           <div className="card" style={{ marginTop: 8 }}>
             <h4 style={{ marginBottom: 12 }}>🏷️ Setări brand & ton</h4>
             <div style={{ marginBottom: 12 }}>
@@ -1007,13 +958,9 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
               <span>Include textul brandului în postări</span>
             </div>
           </div>
-          {/* Template Editor inline */}
+          {/* Template Editor */}
           <div className="card" style={{ marginTop: 8 }}>
             <h4 style={{ marginBottom: 12 }}>📝 Șabloane personalizate</h4>
-            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-              <button className={`chip ${templates.facebook !== undefined ? "on" : ""}`} onClick={() => {}}>Facebook</button>
-              <button className={`chip ${templates.instagram !== undefined ? "on" : ""}`} onClick={() => {}}>Instagram</button>
-            </div>
             <textarea className="field" rows={4} value={templates.facebook || ""} onChange={e => setTemplates({...templates, facebook: e.target.value})} placeholder="Șablon Facebook" style={{ marginBottom: 8 }} />
             <textarea className="field" rows={4} value={templates.instagram || ""} onChange={e => setTemplates({...templates, instagram: e.target.value})} placeholder="Șablon Instagram" />
             <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>Variabile: {`{nume}, {pret}, {link}, {descriere}, {emoji}, {despre_brand}, {hashtaguri}`}</div>
@@ -1051,8 +998,6 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
             </div>
           </div>
           <button className="icon-btn" onClick={() => setShowSettings(true)}>⚙️ Setări</button>
-          <button className="icon-btn" onClick={() => resetCache("trends")} title="Resetează trendurile de azi" style={{ fontSize:13 }}>🔥 Reset</button>
-          <button className="icon-btn" onClick={() => resetCache("all")} title="Șterge tot cache-ul" style={{ fontSize:13 }}>🗑️ Cache</button>
         </div>
 
         {/* TABS */}
@@ -1065,7 +1010,7 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
           ))}
         </div>
 
-        {/* TAB: SYNC */}
+        {/* SYNC TAB */}
         {tab === "sync" && (
           <div className="card" style={{ textAlign: "center", padding: "44px 24px" }}>
             <div style={{ fontSize: 44, marginBottom: 16 }}>📂</div>
@@ -1086,13 +1031,13 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
             <div style={{ borderTop: `1px solid ${C.border}`, margin: "16px auto", width: "80%" }} />
             <div>
               <div style={{ fontWeight: 600, marginBottom: 8, color: C.sub }}>📁 Încărcare manuală (CSV)</div>
-             <input type="file" accept=".csv,.xlsx,.xls" onChange={handleManualUpload} style={{ display: "none" }} id="csv-upload-input" />
+              <input type="file" accept=".csv" onChange={handleManualUpload} style={{ display: "none" }} id="csv-upload-input" />
               <label htmlFor="csv-upload-input" style={{ display: "inline-block", background: C.accentDim, border: `1px solid ${C.accentBorder}`, padding: "10px 22px", borderRadius: 9, cursor: "pointer", fontSize: 14, fontWeight: 600, color: C.accent, transition: "all 0.2s" }}
                 onMouseEnter={e => e.currentTarget.style.background = "rgba(110,231,183,0.2)"}
                 onMouseLeave={e => e.currentTarget.style.background = C.accentDim}>
                 📂 Alege fișier CSV
               </label>
-              <div style={{ fontSize: 12, color: C.muted, marginTop: 10 }}>Fișierul trebuie să aibă coloanele: <strong>Denumire, Greutate, Marca, Descriere F, Descriere S, Pret, Imagine, Url</strong><br/>(separator virgulă, suportă ghilimele duble)</div>
+              <div style={{ fontSize: 12, color: C.muted, marginTop: 10 }}>Fișierul trebuie să aibă coloanele: <strong>Denumire, Pret, Stoc, Link, Poza, Descriere</strong><br/>(separator virgulă)</div>
             </div>
             {catalog.length > 0 && (
               <div style={{ marginTop: 32, display: "inline-flex", gap: 20, padding: "14px 24px", background: C.accentDim, border: `1px solid ${C.accentBorder}`, borderRadius: 12 }}>
@@ -1104,11 +1049,11 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
           </div>
         )}
 
-        {/* TAB: TRENDS */}
+        {/* TRENDS TAB */}
         {tab === "trends" && (
           <div>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20, flexWrap:"wrap", gap:12 }}>
-              <div><h2 style={{ fontFamily:"'Bricolage Grotesque'", fontSize:19, marginBottom:4 }}>🔥 Top 30 Produse pentru Azi</h2><p style={{ color:C.muted, fontSize:13 }}>Analiză bazată pe sezonalitate și tendințe Google · {catalog.length} produse în catalog{trendsDate===new Date().toISOString().slice(0,10) && <span style={{ color:C.accent, marginLeft:8 }}>✓ actualizat azi</span>}</p></div>
+              <div><h2 style={{ fontFamily:"'Bricolage Grotesque'", fontSize:19, marginBottom:4 }}>🔥 Top 20 Produse pentru Azi</h2><p style={{ color:C.muted, fontSize:13 }}>Analiză bazată pe sezonalitate și tendințe Google · {catalog.length} produse în catalog{trendsDate===new Date().toISOString().slice(0,10) && <span style={{ color:C.accent, marginLeft:8 }}>✓ actualizat azi</span>}</p></div>
               <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
                 <button className="btn-s btn-sm" onClick={fetchGoogleTrends} disabled={loading}>📈 Încarcă tendințe Google</button>
                 <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:12, color:C.muted }}><input type="checkbox" checked={useGoogleTrends} onChange={e => setUseGoogleTrends(e.target.checked)} /> Folosește tendințe în AI</label>
@@ -1181,7 +1126,7 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
           </div>
         )}
 
-        {/* TAB: META ADS */}
+        {/* META ADS TAB (prescurtat, dar complet) */}
         {tab === "ads" && (
           <div>
             {/* Step bar */}
@@ -1441,7 +1386,7 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
           </div>
         )}
 
-        {/* TAB: NEWSLETTER */}
+        {/* NEWSLETTER TAB */}
         {tab === "newsletter" && (
           <div>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20, flexWrap:"wrap", gap:12 }}>
@@ -1471,7 +1416,7 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
           </div>
         )}
 
-        {/* TAB: CARUSEL / VIDEO */}
+        {/* CAROUSEL TAB */}
         {tab === "carousel" && (
           <div>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20, flexWrap:"wrap", gap:12 }}>
@@ -1485,7 +1430,7 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
           </div>
         )}
 
-        {/* TAB: BLOG GOMAG */}
+        {/* BLOG TAB */}
         {tab === "blog" && (
           <div>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20, flexWrap:"wrap", gap:12 }}>
@@ -1511,7 +1456,7 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
           </div>
         )}
 
-        {/* TAB: BUFFER (modificat cu integrare API) */}
+        {/* BUFFER TAB */}
         {tab === "buffer" && (
           <div>
             <h2 style={{ fontFamily:"'Bricolage Grotesque'", fontSize:19, marginBottom:6 }}>📤 Buffer — Postări Organice</h2>
@@ -1522,10 +1467,7 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
               {selProd && (
                 <div style={{ display:"flex", gap:12, alignItems:"center", marginTop:12, padding:"11px 14px", background:"#0a0a1a", borderRadius:9 }}>
                   {selProd.img && <img src={selProd.img} style={{ width:44, height:44, objectFit:"cover", borderRadius:8, flexShrink:0 }} alt="" />}
-                  <div>
-                    <div style={{ fontWeight:600 }}>{selProd.name}</div>
-                    <div style={{ fontSize:12, color:C.muted }}>{selProd.price} RON · {selProd.stoc==="instock"?"✓ In stoc":"Fără stoc"}</div>
-                  </div>
+                  <div><div style={{ fontWeight:600 }}>{selProd.name}</div><div style={{ fontSize:12, color:C.muted }}>{selProd.price} RON · {selProd.stoc==="instock"?"✓ In stoc":"Fără stoc"}</div></div>
                 </div>
               )}
             </div>
@@ -1554,11 +1496,7 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
             </div>
             <div className="card" style={{ marginBottom:14 }}>
               <div style={{ fontSize:13, fontWeight:500, marginBottom:10 }}>Platforme disponibile în contul tău Buffer</div>
-              <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-                {["📘 Facebook","📸 Instagram","🎵 TikTok","🧵 Threads","🐦 X"].map(p => (
-                  <div key={p} style={{ padding:"8px 14px", borderRadius:20, border:`1px solid ${C.accent}`, color:C.accent, fontSize:13, background:C.accentDim }}>{p}</div>
-                ))}
-              </div>
+              <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>{["📘 Facebook","📸 Instagram","🎵 TikTok","🧵 Threads","🐦 X"].map(p => (<div key={p} style={{ padding:"8px 14px", borderRadius:20, border:`1px solid ${C.accent}`, color:C.accent, fontSize:13, background:C.accentDim }}>{p}</div>))}</div>
             </div>
             <div style={{ background:"rgba(251,191,36,.06)", border:`1px solid rgba(251,191,36,.2)`, borderRadius:12, padding:16, marginBottom:16, fontSize:13, lineHeight:1.7 }}>
               <strong style={{ color:C.warn }}>ℹ️ Cum funcționează:</strong>
@@ -1572,10 +1510,9 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
           </div>
         )}
 
-        {/* TAB: MANUAL & EDITOR */}
+        {/* MANUAL & EDITOR TAB */}
         {tab === "manual" && (
           <div>
-            {/* Selectare manuală cu butoane de reordonare */}
             <div className="card" style={{ marginBottom: 24 }}>
               <h4 style={{ marginBottom: 12 }}>🛍️ Selectare manuală produse</h4>
               <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
@@ -1599,7 +1536,6 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
                     </div>
                   ))}
                 </div>
-
                 {/* Lista selectată cu butoane de reordonare */}
                 <div style={{ flex: 1, maxHeight: 300, overflowY: "auto", border: `1px solid ${C.accentBorder}`, borderRadius: 8, padding: 8, background: C.accentDim }}>
                   <div style={{ fontWeight: 600, marginBottom: 8 }}>Selectate ({selectedProducts.length})</div>
@@ -1705,7 +1641,7 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
           </div>
         )}
 
-        {/* TAB: RAPOARTE */}
+        {/* REPORTS TAB */}
         {tab === "reports" && (
           <div>
             <div className="card" style={{ marginBottom: 24 }}>
@@ -1751,6 +1687,36 @@ ${topProducts.map(([n,c]) => `   ${n} – ${c} ori`).join("\n")}
                 )}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* GENERAL CONTENT TAB */}
+        {tab === "general" && (
+          <div className="card">
+            <h2 style={{ fontSize: 18, marginBottom: 12 }}>✍️ Conținut general pe un subiect</h2>
+            <p style={{ marginBottom: 12, color: C.muted }}>Introdu un subiect (ex. „Beneficiile postului intermitent”, „Cum să ai un sistem imunitar puternic”) și alege tipul de conținut. AI-ul va genera text folosind tonul și brandul configurat.</p>
+            <div style={{ marginBottom: 12 }}>
+              <input className="field" placeholder="Subiectul tău..." value={generalTopic} onChange={e => setGeneralTopic(e.target.value)} style={{ marginBottom: 8 }} />
+              <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+                {["blog", "newsletter", "social"].map(type => (
+                  <button key={type} className={`chip ${generalContentType === type ? "on" : ""}`} onClick={() => setGeneralContentType(type)}>
+                    {type === "blog" ? "📝 Blog" : type === "newsletter" ? "✉️ Newsletter" : "📱 Social Media"}
+                  </button>
+                ))}
+              </div>
+              <button className="btn-p" onClick={generateGeneralContent}>✨ Generează conținut</button>
+            </div>
+            {generalResult && (
+              <div style={{ marginTop: 16 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <h4>Rezultat generat</h4>
+                  <CopyBtn text={generalResult} id="general-result" />
+                </div>
+                <div className="card" style={{ background: "#0a0a1a", whiteSpace: "pre-wrap", fontSize: 14, lineHeight: 1.6 }}>
+                  {generalResult}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
