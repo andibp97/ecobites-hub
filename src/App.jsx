@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 // import ReactGA from "react-ga4";   // șterge sau comentează
+import * as XLSX from "xlsx";
 
 // ─── Config ───────────────────────────────────────────────────────────
 const LS_KEY = "ecobites_hub_v4";
@@ -359,46 +360,103 @@ export default function EcoBitesHub() {
   };
 
   const handleManualUpload = (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-    setLoading(true);
-    setLoadMsg("Procesez fișierul CSV încărcat...");
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
+  const file = event.target.files[0];
+  if (!file) return;
+  setLoading(true);
+  setLoadMsg("Procesez fișierul încărcat...");
+
+  const extension = file.name.split('.').pop().toLowerCase();
+  const reader = new FileReader();
+
+  reader.onload = (e) => {
+    try {
+      let data;
+      if (extension === 'csv') {
+        // Parsare CSV
         const text = e.target.result;
-        const parsed = text.split("\n").slice(1).map(row => {
+        const rows = text.split("\n");
+        const headers = rows[0].split(",").map(h => h.replace(/^"|"$/g, '').trim());
+        // Mă aștept la coloanele: Denumire, Pret, Stoc, Link, Poza, Descriere (în această ordine)
+        const parsed = rows.slice(1).map(row => {
           const cols = row.match(/(".*?"|[^,]+)(?=\s*,|\s*$)/g)?.map(c => c.replace(/^"|"$/g, "").trim()) || [];
-          if (cols.length < 8) return null;
+          if (cols.length < 6) return null;
           const name = cols[0];
-          const price = parseFloat(cols[5].replace(',', '.'));
+          const price = parseFloat(cols[1].replace(',', '.'));
           if (isNaN(price) || price <= 0) return null;
-          const link = cols[7];
-          const img = cols[6];
-          const desc = (cols[3] + " " + cols[4]).trim();
-          return { name, price, stoc: "instock", link, img, desc };
+          const stoc = cols[2];
+          const link = cols[3];
+          const img = cols[4];
+          const desc = cols[5];
+          return { name, price, stoc, link, img, desc };
         }).filter(p => p && p.name);
-        const filtered = parsed.filter(p => p.price >= priceMin && p.price <= priceMax);
-        const today = new Date().toISOString().slice(0, 10);
-        setCatalog(filtered);
-        setCatalogDate(today);
-        lsSet("eb_catalog", filtered);
-        localStorage.setItem("eb_catalog_date", today);
-        alert(`✅ Catalog încărcat cu succes: ${filtered.length} produse`);
-      } catch (err) {
-        alert("Eroare la parsarea fișierului CSV: " + err.message);
-      } finally {
-        setLoading(false);
-        setLoadMsg("");
+        data = parsed;
+      } else {
+        // Parsare Excel (xlsx, xls)
+        const workbook = XLSX.read(e.target.result, { type: 'binary' });
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+        if (!rows || rows.length < 2) throw new Error("Fișierul nu conține date");
+        const headers = rows[0].map(cell => String(cell || "").trim());
+        // Indexăm coloanele după header (pentru flexibilitate)
+        const colIndex = {
+          Denumire: headers.findIndex(h => h.toLowerCase().includes("denumire") || h.toLowerCase() === "nume"),
+          Pret: headers.findIndex(h => h.toLowerCase().includes("pret")),
+          Stoc: headers.findIndex(h => h.toLowerCase().includes("stoc")),
+          Link: headers.findIndex(h => h.toLowerCase().includes("link") || h.toLowerCase() === "url"),
+          Poza: headers.findIndex(h => h.toLowerCase().includes("poza") || h.toLowerCase().includes("imagine")),
+          Descriere: headers.findIndex(h => h.toLowerCase().includes("descriere"))
+        };
+        // Dacă nu găsește după nume, folosește ordinea prestabilită (0,1,2,3,4,5)
+        if (colIndex.Denumire === -1) colIndex.Denumire = 0;
+        if (colIndex.Pret === -1) colIndex.Pret = 1;
+        if (colIndex.Stoc === -1) colIndex.Stoc = 2;
+        if (colIndex.Link === -1) colIndex.Link = 3;
+        if (colIndex.Poza === -1) colIndex.Poza = 4;
+        if (colIndex.Descriere === -1) colIndex.Descriere = 5;
+
+        const parsed = rows.slice(1).map(row => {
+          const name = row[colIndex.Denumire] ? String(row[colIndex.Denumire]).trim() : "";
+          if (!name) return null;
+          const price = parseFloat(String(row[colIndex.Pret] || "0").replace(',', '.'));
+          if (isNaN(price) || price <= 0) return null;
+          const stoc = row[colIndex.Stoc] ? String(row[colIndex.Stoc]).trim() : "";
+          const link = row[colIndex.Link] ? String(row[colIndex.Link]).trim() : "";
+          const img = row[colIndex.Poza] ? String(row[colIndex.Poza]).trim() : "";
+          const desc = row[colIndex.Descriere] ? String(row[colIndex.Descriere]).trim() : "";
+          return { name, price, stoc, link, img, desc };
+        }).filter(p => p);
+        data = parsed;
       }
-    };
-    reader.onerror = () => {
-      alert("Eroare la citirea fișierului");
+
+      const filtered = data.filter(p => p.price >= priceMin && p.price <= priceMax);
+      const today = new Date().toISOString().slice(0, 10);
+      setCatalog(filtered);
+      setCatalogDate(today);
+      lsSet("eb_catalog", filtered);
+      localStorage.setItem("eb_catalog_date", today);
+      alert(`✅ Catalog încărcat cu succes: ${filtered.length} produse`);
+    } catch (err) {
+      console.error(err);
+      alert("Eroare la parsarea fișierului: " + err.message);
+    } finally {
       setLoading(false);
       setLoadMsg("");
-    };
-    reader.readAsText(file, "UTF-8");
+    }
   };
+
+  reader.onerror = () => {
+    alert("Eroare la citirea fișierului");
+    setLoading(false);
+    setLoadMsg("");
+  };
+
+  if (extension === 'csv') {
+    reader.readAsText(file, "UTF-8");
+  } else {
+    reader.readAsBinaryString(file);
+  }
+};
 
   // Generate trends
   const generateTrends = async (force = false) => {
@@ -995,7 +1053,7 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
             <div style={{ borderTop: `1px solid ${C.border}`, margin: "16px auto", width: "80%" }} />
             <div>
               <div style={{ fontWeight: 600, marginBottom: 8, color: C.sub }}>📁 Încărcare manuală (CSV)</div>
-              <input type="file" accept=".csv" onChange={handleManualUpload} style={{ display: "none" }} id="csv-upload-input" />
+             <input type="file" accept=".csv,.xlsx,.xls" onChange={handleManualUpload} style={{ display: "none" }} id="csv-upload-input" />
               <label htmlFor="csv-upload-input" style={{ display: "inline-block", background: C.accentDim, border: `1px solid ${C.accentBorder}`, padding: "10px 22px", borderRadius: 9, cursor: "pointer", fontSize: 14, fontWeight: 600, color: C.accent, transition: "all 0.2s" }}
                 onMouseEnter={e => e.currentTarget.style.background = "rgba(110,231,183,0.2)"}
                 onMouseLeave={e => e.currentTarget.style.background = C.accentDim}>
