@@ -212,7 +212,7 @@ export default function EcoBitesHub() {
     const model = geminiModel === "gemini-2.5-flash" ? "gemini-2.5-flash" : "gemini-2.0-flash";
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`, {
       method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ contents:[{parts:[{text:prompt}]}], generationConfig:{temperature:0.7, maxOutputTokens:2048} }),
+      body: JSON.stringify({ contents:[{parts:[{text:prompt}]}], generationConfig:{temperature:0.7, maxOutputTokens:4096} }),
     });
     const d = await res.json();
     if (d.error) throw new Error(d.error.message);
@@ -235,7 +235,7 @@ export default function EcoBitesHub() {
           "HTTP-Referer": "https://ecobites.ro",
           "X-Title": "EcoBites Hub"
         },
-        body: JSON.stringify({ model: modelToUse, messages: [{ role: "user", content: prompt }], max_tokens: 2048 }),
+        body: JSON.stringify({ model: modelToUse, messages: [{ role: "user", content: prompt }], max_tokens: 4096 }),
       });
       const d = await res.json();
       if (d.error) {
@@ -466,11 +466,11 @@ const generateTrends = async (force = false) => {
   if (!force && trendsDate === today && trends) return;
   
   await new Promise(resolve => setTimeout(resolve, 2000));
-  setLoading(true); setLoadMsg("Analizez catalogul — top 30 produse pentru azi...");
+  setLoading(true); setLoadMsg("Analizez catalogul — top 20 produse pentru azi...");
   
-  // Selectează doar produsele în stoc și ia un eșantion aleator de maxim 80
+  // Selectează doar produsele în stoc și ia un eșantion aleator de maxim 50 (pentru a avea destule din care să aleagă AI-ul 20)
   const inStock = catalog.filter(p => p.stoc === "instock");
-  const sampleSize = Math.min(80, inStock.length);
+  const sampleSize = Math.min(50, inStock.length);
   const shuffled = [...inStock];
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -485,13 +485,12 @@ const generateTrends = async (force = false) => {
       trendsContext = `\n\nTendințe Google în România astăzi (${today}):\n${googleTrends.slice(0,10).join(", ")}\n\nFolosește aceste subiecte populare pentru a selecta produsele relevante.`;
     }
     
-    // Trunchiază descrierea la 60 de caractere
-    const sampleText = sample.map(p=>`${p.name} | ${p.price} RON | ${p.desc.substring(0,60)}`).join("\n");
-    const basePrompt = `IMPORTANT: Răspunde EXCLUSIV cu JSON valid, fără text înainte sau după. Începe direct cu { și termină cu }.
+    const sampleText = sample.map(p=>`${p.name} | ${p.price} RON | ${p.desc.substring(0,40)}`).join("\n");
+    const basePrompt = `IMPORTANT: Răspunde EXCLUSIV cu JSON valid, compact (fără spații inutile). Începe direct cu { și termină cu }.
 
 Ești un copywriter profesionist pentru social media, specializat în produse naturiste în România.
 Luna curentă: ${month}.${trendsContext}
-Analizează catalogul și selectează EXACT 30 produse cu cel mai mare potențial de vânzare acum, bazat pe sezonalitate, beneficii și tendințele actuale.
+Analizează catalogul și selectează EXACT 20 produse cu cel mai mare potențial de vânzare acum, bazat pe sezonalitate, beneficii și tendințele actuale.
 
 Pentru fiecare produs, oferă:
 - nume: exact cum apare în catalog
@@ -511,18 +510,8 @@ Pentru fiecare produs, oferă:
   * 5-7 hashtag-uri relevante: #naturist #bio #romania #produseNaturale #wellness #sănătate #primăvară
   * emoji-uri prietenoase
 
-Răspunde DOAR cu JSON în acest format:
-{
-  "recomandari": [
-    {
-      "nume": "...",
-      "motiv": "...",
-      "idei": ["...", "...", "...", "..."],
-      "facebook_post": "...",
-      "instagram_caption": "..."
-    }
-  ]
-}
+Răspunde DOAR cu JSON compact în acest format:
+{"recomandari":[{"nume":"...","motiv":"...","idei":["...","...","...","..."],"facebook_post":"...","instagram_caption":"..."}]}
 
 Catalog (nume | preț | descriere):
 ${sampleText}`;
@@ -542,7 +531,6 @@ ${sampleText}`;
   }
   setLoading(false); setLoadMsg("");
 };
-
   // Generate hashtags with AI
   const generateHashtags = async (productName, productDesc) => {
     setLoading(true);
