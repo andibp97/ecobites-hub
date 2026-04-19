@@ -306,42 +306,51 @@ export default function EcoBitesHub() {
 
   // ── Parsare CSV/Excel cu detectare coloane ───────────────────────────
   const parseCSVWithHeaders = (csvText) => {
-    const lines = csvText.split(/\r?\n/);
-    if (lines.length < 2) return [];
-    const headers = lines[0].split(',').map(h => h.replace(/^"|"$/g, '').trim().toLowerCase());
-    const colMap = {
-      nume: headers.findIndex(h => h.includes('denumire') || h === 'nume' || h === 'produs'),
-      pret: headers.findIndex(h => h.includes('pret') || h === 'price'),
-      stoc: headers.findIndex(h => h.includes('stoc') || h === 'stock'),
-      link: headers.findIndex(h => h.includes('link') || h === 'url'),
-      imagine: headers.findIndex(h => h.includes('poza') || h.includes('imagine')),
-      descriere: headers.findIndex(h => h.includes('descriere'))
-    };
-    if (colMap.nume === -1) colMap.nume = 0;
-    if (colMap.pret === -1) colMap.pret = 1;
-    if (colMap.stoc === -1) colMap.stoc = 2;
-    if (colMap.link === -1) colMap.link = 3;
-    if (colMap.imagine === -1) colMap.imagine = 4;
-    if (colMap.descriere === -1) colMap.descriere = 5;
-
-    const result = [];
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line) continue;
-      const cols = line.match(/(".*?"|[^,]+)(?=\s*,|\s*$)/g)?.map(c => c.replace(/^"|"$/g, '').trim()) || [];
-      if (cols.length < Math.max(...Object.values(colMap)) + 1) continue;
-      const name = cols[colMap.nume];
-      if (!name) continue;
-      const price = parseFloat(cols[colMap.pret].replace(',', '.'));
-      if (isNaN(price) || price <= 0) continue;
-      const stoc = cols[colMap.stoc];
-      const link = cols[colMap.link];
-      const img = cols[colMap.imagine];
-      const desc = cols[colMap.descriere];
-      result.push({ name, price, stoc, link, img, desc });
-    }
-    return result;
+  const lines = csvText.split(/\r?\n/);
+  if (lines.length < 2) return [];
+  const headers = lines[0].split(',').map(h => h.replace(/^"|"$/g, '').trim());
+  
+  // Mapăm exact coloanele tale
+  const colIndex = {
+    nume: headers.findIndex(h => h === "Denumire Produs"),
+    brand: headers.findIndex(h => h === "Marca (Brand)"),
+    descriere: headers.findIndex(h => h === "Descriere Produs"),
+    descriereScurta: headers.findIndex(h => h === "Descriere Scurta a Produsului"),
+    pret: headers.findIndex(h => h === "Pret"),
+    imagine: headers.findIndex(h => h === "Imagine principala"),
+    url: headers.findIndex(h => h === "Url")
   };
+  
+  // Fallback la indexuri dacă nu găsește (nu ar trebui să se întâmple)
+  if (colIndex.nume === -1) colIndex.nume = 0;
+  if (colIndex.pret === -1) colIndex.pret = 5;
+  if (colIndex.url === -1) colIndex.url = 7;
+  if (colIndex.imagine === -1) colIndex.imagine = 6;
+  if (colIndex.descriere === -1) colIndex.descriere = 3;
+  if (colIndex.brand === -1) colIndex.brand = 2;
+  
+  const result = [];
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    // Parsare simplă (suportă ghilimele)
+    const cols = line.match(/(".*?"|[^,]+)(?=\s*,|\s*$)/g)?.map(c => c.replace(/^"|"$/g, '').trim()) || [];
+    if (cols.length < Math.max(colIndex.nume, colIndex.pret, colIndex.url) + 1) continue;
+    const name = cols[colIndex.nume];
+    if (!name) continue;
+    let priceStr = cols[colIndex.pret].replace(',', '.');
+    const price = parseFloat(priceStr);
+    if (isNaN(price) || price <= 0) continue;
+    const brand = cols[colIndex.brand] || "";
+    const desc = cols[colIndex.descriere] || "";
+    const shortDesc = cols[colIndex.descriereScurta] || "";
+    const fullDesc = (desc + " " + shortDesc).trim();
+    const link = cols[colIndex.url];
+    const img = cols[colIndex.imagine];
+    result.push({ name, price, stoc: "instock", link, img, desc: fullDesc, brand });
+  }
+  return result;
+};
 
   // Google Trends fetch
   const fetchGoogleTrends = async () => {
@@ -400,41 +409,46 @@ export default function EcoBitesHub() {
         if (extension === 'csv') {
           const text = e.target.result;
           parsed = parseCSVWithHeaders(text);
-        } else {
-          // Excel
-          const workbook = XLSX.read(e.target.result, { type: 'binary' });
-          const sheetName = workbook.SheetNames[0];
-          const sheet = workbook.Sheets[sheetName];
-          const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
-          if (!rows || rows.length < 2) throw new Error("Fișierul nu conține date");
-          const headers = rows[0].map(cell => String(cell || "").trim().toLowerCase());
-          const colIndex = {
-            nume: headers.findIndex(h => h.includes('denumire') || h === 'nume' || h === 'produs'),
-            pret: headers.findIndex(h => h.includes('pret') || h === 'price'),
-            stoc: headers.findIndex(h => h.includes('stoc') || h === 'stock'),
-            link: headers.findIndex(h => h.includes('link') || h === 'url'),
-            imagine: headers.findIndex(h => h.includes('poza') || h.includes('imagine')),
-            descriere: headers.findIndex(h => h.includes('descriere'))
-          };
-          if (colIndex.nume === -1) colIndex.nume = 0;
-          if (colIndex.pret === -1) colIndex.pret = 1;
-          if (colIndex.stoc === -1) colIndex.stoc = 2;
-          if (colIndex.link === -1) colIndex.link = 3;
-          if (colIndex.imagine === -1) colIndex.imagine = 4;
-          if (colIndex.descriere === -1) colIndex.descriere = 5;
+} else {
+  // Parsare Excel (xlsx, xls)
+  const workbook = XLSX.read(e.target.result, { type: 'binary' });
+  const sheetName = workbook.SheetNames[0];
+  const sheet = workbook.Sheets[sheetName];
+  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+  if (!rows || rows.length < 2) throw new Error("Fișierul nu conține date");
+  const headers = rows[0].map(cell => String(cell || "").trim());
+  const colIndex = {
+    nume: headers.findIndex(h => h === "Denumire Produs"),
+    brand: headers.findIndex(h => h === "Marca (Brand)"),
+    descriere: headers.findIndex(h => h === "Descriere Produs"),
+    descriereScurta: headers.findIndex(h => h === "Descriere Scurta a Produsului"),
+    pret: headers.findIndex(h => h === "Pret"),
+    imagine: headers.findIndex(h => h === "Imagine principala"),
+    url: headers.findIndex(h => h === "Url")
+  };
+  if (colIndex.nume === -1) colIndex.nume = 0;
+  if (colIndex.pret === -1) colIndex.pret = 5;
+  if (colIndex.url === -1) colIndex.url = 7;
+  if (colIndex.imagine === -1) colIndex.imagine = 6;
+  if (colIndex.descriere === -1) colIndex.descriere = 3;
+  if (colIndex.brand === -1) colIndex.brand = 2;
 
-          parsed = rows.slice(1).map(row => {
-            const name = row[colIndex.nume] ? String(row[colIndex.nume]).trim() : "";
-            if (!name) return null;
-            const price = parseFloat(String(row[colIndex.pret] || "0").replace(',', '.'));
-            if (isNaN(price) || price <= 0) return null;
-            const stoc = row[colIndex.stoc] ? String(row[colIndex.stoc]).trim() : "";
-            const link = row[colIndex.link] ? String(row[colIndex.link]).trim() : "";
-            const img = row[colIndex.imagine] ? String(row[colIndex.imagine]).trim() : "";
-            const desc = row[colIndex.descriere] ? String(row[colIndex.descriere]).trim() : "";
-            return { name, price, stoc, link, img, desc };
-          }).filter(p => p);
-        }
+  const parsed = rows.slice(1).map(row => {
+    const name = row[colIndex.nume] ? String(row[colIndex.nume]).trim() : "";
+    if (!name) return null;
+    let priceStr = String(row[colIndex.pret] || "0").replace(',', '.');
+    const price = parseFloat(priceStr);
+    if (isNaN(price) || price <= 0) return null;
+    const brand = row[colIndex.brand] ? String(row[colIndex.brand]).trim() : "";
+    const desc = row[colIndex.descriere] ? String(row[colIndex.descriere]).trim() : "";
+    const shortDesc = row[colIndex.descriereScurta] ? String(row[colIndex.descriereScurta]).trim() : "";
+    const fullDesc = (desc + " " + shortDesc).trim();
+    const link = row[colIndex.url] ? String(row[colIndex.url]).trim() : "";
+    const img = row[colIndex.imagine] ? String(row[colIndex.imagine]).trim() : "";
+    return { name, price, stoc: "instock", link, img, desc: fullDesc, brand };
+  }).filter(p => p);
+  parsed = parsed; // asignare
+}
 
         const filtered = parsed.filter(p => p.price >= priceMin && p.price <= priceMax);
         const today = new Date().toISOString().slice(0,10);
