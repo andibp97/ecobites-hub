@@ -80,6 +80,7 @@ export default function EcoBitesHub() {
   const [bufferKey,    setBufferKey]    = useState(saved.bufferKey   || "");
   const [keysVisible,  setKeysVisible]  = useState(false);
   const [priceMin,     setPriceMin]     = useState(saved.priceMin || 0);
+  const [bufferSelectedProd, setBufferSelectedProd] = useState(null);
   const [priceMax,     setPriceMax]     = useState(saved.priceMax || 9999);
   const [sheetWebAppUrl, setSheetWebAppUrl] = useState(saved.sheetWebAppUrl || "");
 
@@ -997,9 +998,6 @@ Răspunde în limba română, cu text clar, fără markdown inutil.`;
                         <div style={{ flex:1, minWidth:0 }}><div style={{ fontWeight:600, fontSize:14, marginBottom:2 }}>{item.nume}</div><div style={{ fontSize:12, color:C.accent }}>💡 {item.motiv}</div></div>
                         <div style={{ display:"flex", gap:7, flexShrink:0, flexWrap:"wrap" }}>
                           <button className="btn-s btn-sm" onClick={() => { setSelProd(prod); setAdProd({ name:prod.name, price:prod.price, benefits:prod.desc, link:prod.link, imageUrl:null }); setTab("ads"); setAdsStep(1); }}>📝 Meta Ads</button>
-                          <button className="btn-s btn-sm" onClick={() => { setSelProd(prod); setTab("newsletter"); }}>✉️</button>
-                          <button className="btn-s btn-sm" onClick={() => { setSelProd(prod); setTab("blog"); }}>✍️</button>
-                          <button className="btn-s btn-sm" onClick={() => { setSelProd(prod); setTab("carousel"); }}>🎬</button>
                           <a href={prod.link} target="_blank" rel="noreferrer" className="btn-s btn-sm" style={{ textDecoration:"none" }}>🔗 Produs</a>
                           <button className="btn-s btn-sm" onClick={() => generateHashtags(item.nume, prod.desc)}>#️⃣ Hashtag-uri</button>
                         </div>
@@ -1224,17 +1222,72 @@ Răspunde în limba română, cu text clar, fără markdown inutil.`;
 
         {/* BUFFER TAB */}
         {tab === "buffer" && (
-          <div>
-            <h2 style={{ fontFamily:"'Bricolage Grotesque'", fontSize:19, marginBottom:6 }}>📤 Buffer — Postări Organice</h2>
-            <p style={{ color:C.muted, fontSize:13, marginBottom:20 }}>Programează postări pe Facebook, Instagram, TikTok, Threads, și X.</p>
-            <div className="card" style={{ marginBottom:14 }}><div style={{ fontSize:13, fontWeight:500, marginBottom:12 }}>Alege produs</div><ProductPicker label="" />{selProd && (<div style={{ display:"flex", gap:12, alignItems:"center", marginTop:12, padding:"11px 14px", background:"#0a0a1a", borderRadius:9 }}>{selProd.img && <img src={selProd.img} style={{ width:44, height:44, objectFit:"cover", borderRadius:8, flexShrink:0 }} alt="" />}<div><div style={{ fontWeight:600 }}>{selProd.name}</div><div style={{ fontSize:12, color:C.muted }}>{selProd.price} RON · {selProd.stoc==="instock"?"✓ In stoc":"Fără stoc"}</div></div></div>)}</div>
-            <div className="card" style={{ marginBottom:14 }}><div style={{ fontSize:13, fontWeight:500, marginBottom:10 }}>Text postare</div>{selectedAd && selProd ? (<div><div style={{ padding:"12px 14px", background:"#0a0a1a", borderRadius:9, fontSize:13, color:C.sub, lineHeight:1.7, marginBottom:8 }}>{selectedAd.headline}<br/><br/>{selectedAd.primary_text}<br/><br/>{selProd.link}</div><div style={{ display:"flex", gap:8 }}><CopyBtn text={`${selectedAd.headline}\n\n${selectedAd.primary_text}\n\n${selProd.link}`} id="buffer-text" /><button className="btn-p btn-sm" onClick={() => postToBuffer(`${selectedAd.headline}\n\n${selectedAd.primary_text}\n\n${selProd.link}`)}>📤 Postează în Buffer (draft)</button></div></div>) : (<div style={{ color:C.muted, fontSize:13, lineHeight:1.6 }}>Generează texte în tab-ul 📝 Meta Ads și selectează o variantă — aceasta va apărea automat aici.<br/>{!selProd && "Selectează și un produs de mai sus."}</div>)}</div>
-            <div className="card" style={{ marginBottom:14 }}><div style={{ fontSize:13, fontWeight:500, marginBottom:10 }}>Platforme disponibile în contul tău Buffer</div><div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>{["📘 Facebook","📸 Instagram","🎵 TikTok","🧵 Threads","🐦 X"].map(p => (<div key={p} style={{ padding:"8px 14px", borderRadius:20, border:`1px solid ${C.accent}`, color:C.accent, fontSize:13, background:C.accentDim }}>{p}</div>))}</div></div>
-            <div style={{ background:"rgba(251,191,36,.06)", border:`1px solid rgba(251,191,36,.2)`, borderRadius:12, padding:16, marginBottom:16, fontSize:13, lineHeight:1.7 }}><strong style={{ color:C.warn }}>ℹ️ Cum funcționează:</strong><div style={{ color:C.sub, marginTop:6 }}>Postările sunt trimise ca <strong>draft</strong> în Buffer. Poți să le editezi și să le programezi ulterior din contul Buffer.<br/>Analytics-ul Buffer rămâne disponibil în contul tău Buffer.</div></div>
-            <a href="https://publish.buffer.com" target="_blank" rel="noreferrer" style={{ display:"inline-flex", alignItems:"center", gap:7, color:C.accent, fontSize:13, textDecoration:"none", background:C.accentDim, border:`1px solid ${C.accentBorder}`, padding:"9px 16px", borderRadius:9 }}>🔗 Deschide Buffer</a>
-            {bufferStatus && <div style={{ marginTop:12, color:C.accent, fontSize:13 }}>{bufferStatus}</div>}
+  <div>
+    <h2 style={{ fontFamily:"'Bricolage Grotesque'", fontSize:19, marginBottom:6 }}>📤 Buffer — Postări Organice</h2>
+    <p style={{ color:C.muted, fontSize:13, marginBottom:20 }}>Selectează un produs din trenduri și postează direct în Buffer (draft).</p>
+
+    <div className="card" style={{ marginBottom:14 }}>
+      <div style={{ fontSize:13, fontWeight:500, marginBottom:12 }}>Alege produs din trenduri</div>
+      <select className="field" value={bufferSelectedProd?.name || ""} onChange={e => {
+        const prod = catalog.find(p => p.name === e.target.value);
+        setBufferSelectedProd(prod);
+      }} style={{ marginBottom:12 }}>
+        <option value="">-- Selectează un produs --</option>
+        {trends?.map((item, idx) => (
+          <option key={idx} value={item.nume}>{item.nume}</option>
+        ))}
+      </select>
+      {bufferSelectedProd && (
+        <div style={{ display:"flex", gap:12, alignItems:"center", marginTop:12, padding:"11px 14px", background:"#0a0a1a", borderRadius:9 }}>
+          {bufferSelectedProd.img && <img src={bufferSelectedProd.img} style={{ width:44, height:44, objectFit:"cover", borderRadius:8 }} alt="" />}
+          <div><div style={{ fontWeight:600 }}>{bufferSelectedProd.name}</div><div style={{ fontSize:12, color:C.muted }}>{bufferSelectedProd.price} RON</div></div>
+        </div>
+      )}
+    </div>
+
+    {bufferSelectedProd && trends && (() => {
+      const trendItem = trends.find(t => t.nume === bufferSelectedProd.name);
+      if (!trendItem) return null;
+      const platform = postPlatform[trends.findIndex(t => t.nume === bufferSelectedProd.name)] || "facebook";
+      const postText = platform === "facebook" ? trendItem.facebook_post : trendItem.instagram_caption;
+      return (
+        <div className="card" style={{ marginBottom:14 }}>
+          <div style={{ fontSize:13, fontWeight:500, marginBottom:10 }}>Postare ({platform === "facebook" ? "Facebook" : "Instagram"})</div>
+          <div style={{ padding:"12px 14px", background:"#0a0a1a", borderRadius:9, fontSize:13, color:C.sub, lineHeight:1.7, marginBottom:8, whiteSpace:"pre-wrap" }}>
+            {postText}<br/><br/>
+            {platform === "facebook" && `🔗 ${bufferSelectedProd.link}`}
+            {platform === "instagram" && "🔗 Link în bio"}
           </div>
-        )}
+          <div style={{ display:"flex", gap:8 }}>
+            <CopyBtn text={postText + (platform === "facebook" ? `\n\n🔗 ${bufferSelectedProd.link}` : "")} id="buffer-text" />
+            <button className="btn-p btn-sm" onClick={() => postToBuffer(postText + (platform === "facebook" ? `\n\n🔗 ${bufferSelectedProd.link}` : ""))}>
+              📤 Postează în Buffer (draft)
+            </button>
+          </div>
+        </div>
+      );
+    })()}
+
+    <div className="card" style={{ marginBottom:14 }}>
+      <div style={{ fontSize:13, fontWeight:500, marginBottom:10 }}>Platforme disponibile în contul tău Buffer</div>
+      <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+        {["📘 Facebook","📸 Instagram","🎵 TikTok","🧵 Threads","🐦 X"].map(p => (
+          <div key={p} style={{ padding:"8px 14px", borderRadius:20, border:`1px solid ${C.accent}`, color:C.accent, fontSize:13, background:C.accentDim }}>{p}</div>
+        ))}
+      </div>
+    </div>
+
+    <div style={{ background:"rgba(251,191,36,.06)", border:`1px solid rgba(251,191,36,.2)`, borderRadius:12, padding:16, marginBottom:16, fontSize:13, lineHeight:1.7 }}>
+      <strong style={{ color:C.warn }}>ℹ️ Cum funcționează:</strong>
+      <div style={{ color:C.sub, marginTop:6 }}>
+        Postările sunt trimise ca <strong>draft</strong> în Buffer. Poți să le editezi și să le programezi ulterior din contul Buffer.<br/>
+        Analytics-ul Buffer rămâne disponibil în contul tău Buffer.
+      </div>
+    </div>
+
+    <a href="https://publish.buffer.com" target="_blank" rel="noreferrer" style={{ display:"inline-flex", alignItems:"center", gap:7, color:C.accent, fontSize:13, textDecoration:"none", background:C.accentDim, border:`1px solid ${C.accentBorder}`, padding:"9px 16px", borderRadius:9 }}>🔗 Deschide Buffer</a>
+  </div>
+)}
 
         {/* MANUAL & EDITOR TAB */}
         {tab === "manual" && (
