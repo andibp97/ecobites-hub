@@ -456,21 +456,34 @@ export default function EcoBitesHub() {
 };
 
   // Generate trends
-  const generateTrends = async (force = false) => {
-    if (!catalog.length) { alert("Sincronizează catalogul mai întâi (tab 📂 Sync)"); return; }
-    const today = new Date().toISOString().slice(0,10);
-    if (!force && trendsDate === today && trends) return;
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    setLoading(true); setLoadMsg("Analizez catalogul — top 30 produse pentru azi...");
-    // ReactGA.event({ category: "AI", action: "generate_trends", label: force ? "forced" : "normal" });
-    try {
-      const month = new Date().toLocaleString("ro-RO", {month:"long"});
-      let trendsContext = "";
-      if (useGoogleTrends && googleTrends && googleTrends.length) {
-        trendsContext = `\n\nTendințe Google în România astăzi (${today}):\n${googleTrends.slice(0,10).join(", ")}\n\nFolosește aceste subiecte populare pentru a selecta produsele relevante.`;
-      }
-      const sample = catalog.slice(0,30).map(p=>`${p.name} | ${p.price} RON | ${p.desc.substring(0,110)}`).join("\n");
-      const basePrompt = `IMPORTANT: Răspunde EXCLUSIV cu JSON valid, fără text înainte sau după. Începe direct cu { și termină cu }.
+const generateTrends = async (force = false) => {
+  if (!catalog.length) { alert("Sincronizează catalogul mai întâi (tab 📂 Sync)"); return; }
+  const today = new Date().toISOString().slice(0,10);
+  if (!force && trendsDate === today && trends) return;
+  
+  await new Promise(resolve => setTimeout(resolve, 2000));
+  setLoading(true); setLoadMsg("Analizez catalogul — top 30 produse pentru azi...");
+  
+  // Selectează doar produsele în stoc și ia un eșantion aleator de maxim 80
+  const inStock = catalog.filter(p => p.stoc === "instock");
+  const sampleSize = Math.min(80, inStock.length);
+  const shuffled = [...inStock];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  const sample = shuffled.slice(0, sampleSize);
+  
+  try {
+    const month = new Date().toLocaleString("ro-RO", {month:"long"});
+    let trendsContext = "";
+    if (useGoogleTrends && googleTrends && googleTrends.length) {
+      trendsContext = `\n\nTendințe Google în România astăzi (${today}):\n${googleTrends.slice(0,10).join(", ")}\n\nFolosește aceste subiecte populare pentru a selecta produsele relevante.`;
+    }
+    
+    // Trunchiază descrierea la 60 de caractere
+    const sampleText = sample.map(p=>`${p.name} | ${p.price} RON | ${p.desc.substring(0,60)}`).join("\n");
+    const basePrompt = `IMPORTANT: Răspunde EXCLUSIV cu JSON valid, fără text înainte sau după. Începe direct cu { și termină cu }.
 
 Ești un copywriter profesionist pentru social media, specializat în produse naturiste în România.
 Luna curentă: ${month}.${trendsContext}
@@ -508,25 +521,23 @@ Răspunde DOAR cu JSON în acest format:
 }
 
 Catalog (nume | preț | descriere):
-${sample}`;
-      const fullPrompt = buildPromptWithBrand(basePrompt, true);
-      const result = await callAIJson(fullPrompt);
-      if (result?.recomandari) {
-        setTrends(result.recomandari); setTrendsDate(today);
-        lsSet("eb_trends", result.recomandari);
-        localStorage.setItem("eb_trends_date", today);
-        const newHistory = [{ date: today, trends: result.recomandari }, ...trendHistory.filter(h => h.date !== today)].slice(0,30);
-        setTrendHistory(newHistory);
-        localStorage.setItem("eb_trends_history", JSON.stringify(newHistory));
-        // ReactGA.event({ category: "AI", action: "trends_generated", value: result.recomandari.length });
-      }
-    } catch (e) {
-      console.error(e);
-      alert("Eroare trends: " + (e.message || e.toString()));
-      // ReactGA.event({ category: "AI", action: "trends_error", label: e.message });
+${sampleText}`;
+    const fullPrompt = buildPromptWithBrand(basePrompt);
+    const result = await callAIJson(fullPrompt);
+    if (result?.recomandari) {
+      setTrends(result.recomandari); setTrendsDate(today);
+      lsSet("eb_trends", result.recomandari);
+      localStorage.setItem("eb_trends_date", today);
+      const newHistory = [{ date: today, trends: result.recomandari }, ...trendHistory.filter(h => h.date !== today)].slice(0,30);
+      setTrendHistory(newHistory);
+      localStorage.setItem("eb_trends_history", JSON.stringify(newHistory));
     }
-    setLoading(false); setLoadMsg("");
-  };
+  } catch (e) {
+    console.error(e);
+    alert("Eroare trends: " + (e.message || e.toString()));
+  }
+  setLoading(false); setLoadMsg("");
+};
 
   // Generate hashtags with AI
   const generateHashtags = async (productName, productDesc) => {
