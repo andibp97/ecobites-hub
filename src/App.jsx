@@ -261,17 +261,21 @@ export default function EcoBitesHub() {
     }
   };
 
-  const callHF = async (prompt) => {
-    if (!hfKey) throw new Error("Lipsă cheie HuggingFace — adaugă în ⚙️ Setări");
-    const res = await fetch(`https://api-inference.huggingface.co/models/${hfModel}`, {
-      method:"POST",
-      headers:{"Content-Type":"application/json","Authorization":`Bearer ${hfKey}`},
-      body: JSON.stringify({ inputs:prompt, parameters:{max_new_tokens:2048, temperature:0.7, return_full_text:false} }),
-    });
-    const d = await res.json();
-    if (d.error) throw new Error(d.error);
-    return Array.isArray(d) ? d[0]?.generated_text : d.generated_text;
-  };
+const callHF = async (prompt) => {
+  const res = await fetch('/api/hf-proxy', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      prompt: prompt,
+      model: hfModel,
+      max_tokens: 2048,
+      temperature: 0.7,
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Eroare proxy HF');
+  return data.text;
+};
 
   const callAI = async (prompt) => {
     switch (provider) {
