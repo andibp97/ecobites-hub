@@ -717,8 +717,12 @@ Răspunde în limba română, cu text clar, fără markdown inutil.`;
   const copyText = (text, id) => {
     navigator.clipboard.writeText(text).then(() => { setCopied(id); setTimeout(() => setCopied(null), 2100); });
   };
-  const CopyBtn = ({ text, id, style }) => (
-<CopyBtn text={postText + (platform === 'facebook' ? `\n\n🔗 ${prod.link}` : "")} id={`post-${i}`} />
+const CopyBtn = ({ text, id, style }) => (
+  <button className={`cpbtn ${copied===id?"ok":""}`} onClick={() => copyText(text, id)} style={style}>
+    {copied===id ? "✓ Copiat" : "Copy"}
+  </button>
+); // ← Ai grijă să ai acest punct și virgulă
+
 
   const ProductPicker = ({ label }) => (
     <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
