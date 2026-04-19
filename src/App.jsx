@@ -516,7 +516,7 @@ Pentru fiecare produs, oferă:
   * un hook atrăgător, o întrebare sau o afirmație surprinzătoare
   * 3-4 beneficii clare ale produsului, explicate pe scurt
   * prețul produsului (în RON) și o mențiune despre ofertă (ex: "la doar X RON")
-  * link-ul complet al produsului (scrie-l în text ca și cum ar fi acolo)
+  * link-ul complet al produsului (scrie-l în text ca și cum ar fi acolo si pastreaza terminatia cu .html)
   * un CTA puternic, prietenos, gen "👉 Comandă acum și bucură-te de [beneficiu]"
   * 4-5 emoji-uri relevante, ton cald și entuziast
   * textul să fie structurat pe 2-3 paragrafe scurte, ușor de citit pe mobil
@@ -718,8 +718,7 @@ Răspunde în limba română, cu text clar, fără markdown inutil.`;
     navigator.clipboard.writeText(text).then(() => { setCopied(id); setTimeout(() => setCopied(null), 2100); });
   };
   const CopyBtn = ({ text, id, style }) => (
-    <button className={`cpbtn ${copied===id?"ok":""}`} onClick={() => copyText(text, id)} style={style}>{copied===id ? "✓ Copiat" : "Copy"}</button>
-  );
+<CopyBtn text={postText + (platform === 'facebook' ? `\n\n🔗 ${prod.link}` : "")} id={`post-${i}`} />
 
   const ProductPicker = ({ label }) => (
     <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
