@@ -49,14 +49,10 @@ const OR_MODELS = [
   { id:"nvidia/nemotron-nano-9b-v2:free",              label:"Nemotron Nano 9B",       tag:"FREE" },
   { id:"google/gemma-4-31b-it:free",                   label:"Gemma 4 31B",            tag:"FREE" },
   { id:"nvidia/nemotron-nano-12b-v2-vl:free",          label:"Nemotron Nano 12B VL",   tag:"FREE" },
-  { id:"nvidia/llama-nemotron-embed-vl-1b-v2:free",    label:"Llama Nemotron Embed",   tag:"FREE" },
   { id:"google/gemma-4-26b-a4b-it:free",               label:"Gemma 4 26B",            tag:"FREE" },
   { id:"openai/gpt-oss-20b:free",                      label:"GPT-OSS 20B",            tag:"FREE" },
-  { id:"qwen/qwen3-coder:free",                        label:"Qwen3 Coder",            tag:"FREE" },
   { id:"meta-llama/llama-3.3-70b-instruct:free",       label:"Llama 3.3 70B",          tag:"FREE" },
   { id:"qwen/qwen3-next-80b-a3b-instruct:free",        label:"Qwen3 Next 80B",         tag:"FREE" },
-  { id:"liquid/lfm-2.5-1.2b-thinking:free",            label:"LFM 1.2B Thinking",      tag:"FREE" },
-  { id:"liquid/lfm-2.5-1.2b-instruct:free",            label:"LFM 1.2B Instruct",      tag:"FREE" },
   { id:"google/gemma-3-27b-it:free",                   label:"Gemma 3 27B",            tag:"FREE" },
   { id:"cognitivecomputations/dolphin-mistral-24b-venice-edition:free", label:"Dolphin Mistral 24B", tag:"FREE" },
   { id:"nousresearch/hermes-3-llama-3.1-405b:free",    label:"Hermes 3 405B",          tag:"FREE" },
@@ -160,6 +156,7 @@ export default function EcoBitesHub() {
   const [newsletterOut, setNewsletterOut] = useState([]);
   const [carouselOut,   setCarouselOut]   = useState("");
   const [blogOut,       setBlogOut]       = useState(null);
+  const [selProd,       setSelProd]       = useState(null);
   const [bufferStatus,  setBufferStatus]  = useState("");
 
   // OpenRouter testing
@@ -296,13 +293,13 @@ export default function EcoBitesHub() {
     return JSON.parse(jsonStr);
   };
 
-  const buildPromptWithBrand = (basePrompt) => {
+  const buildPromptWithBrand = (basePrompt, withHashtags = false) => {
     let brandContext = "";
     if (includeBrandText) {
       brandContext = `Despre brand: ${brandDescription}. Valori: ${brandValues}. Link-uri utile: ${brandLinks}\n`;
     }
     const toneContext = `Scrie într-un ton ${postTone}. ${useEmoji ? "Adaugă 3-4 emoji-uri potrivite." : "Nu folosi emoji-uri."}\n`;
-    const hashtagContext = `La finalul postării pentru Instagram, adaugă aceste hashtag-uri: ${defaultHashtags}\n`;
+    const hashtagContext = withHashtags ? `La finalul postării pentru Instagram, adaugă aceste hashtag-uri: ${defaultHashtags}\n` : "";
     return brandContext + toneContext + hashtagContext + basePrompt;
   };
 
@@ -465,7 +462,7 @@ export default function EcoBitesHub() {
     if (!force && trendsDate === today && trends) return;
     await new Promise(resolve => setTimeout(resolve, 2000));
     setLoading(true); setLoadMsg("Analizez catalogul — top 30 produse pentru azi...");
-    ReactGA.event({ category: "AI", action: "generate_trends", label: force ? "forced" : "normal" });
+    // ReactGA.event({ category: "AI", action: "generate_trends", label: force ? "forced" : "normal" });
     try {
       const month = new Date().toLocaleString("ro-RO", {month:"long"});
       let trendsContext = "";
@@ -512,7 +509,7 @@ Răspunde DOAR cu JSON în acest format:
 
 Catalog (nume | preț | descriere):
 ${sample}`;
-      const fullPrompt = buildPromptWithBrand(basePrompt);
+      const fullPrompt = buildPromptWithBrand(basePrompt, true);
       const result = await callAIJson(fullPrompt);
       if (result?.recomandari) {
         setTrends(result.recomandari); setTrendsDate(today);
@@ -521,12 +518,12 @@ ${sample}`;
         const newHistory = [{ date: today, trends: result.recomandari }, ...trendHistory.filter(h => h.date !== today)].slice(0,30);
         setTrendHistory(newHistory);
         localStorage.setItem("eb_trends_history", JSON.stringify(newHistory));
-        ReactGA.event({ category: "AI", action: "trends_generated", value: result.recomandari.length });
+        // ReactGA.event({ category: "AI", action: "trends_generated", value: result.recomandari.length });
       }
     } catch (e) {
       console.error(e);
       alert("Eroare trends: " + (e.message || e.toString()));
-      ReactGA.event({ category: "AI", action: "trends_error", label: e.message });
+      // ReactGA.event({ category: "AI", action: "trends_error", label: e.message });
     }
     setLoading(false); setLoadMsg("");
   };
@@ -560,7 +557,7 @@ ${sample}`;
     if (!p.name) { alert("Completează detaliile produsului (Pasul 2)"); return; }
     setLoading(true); setLoadMsg("Generez texte reclame...");
     setAdCopy(a => ({...a, error:null}));
-    ReactGA.event({ category: "AI", action: "generate_ad_copy", label: p.name });
+    // ReactGA.event({ category: "AI", action: "generate_ad_copy", label: p.name });
     try {
       const objLabel = selectedObj?.label || "Trafic";
       const basePrompt = `Ești copywriter expert Meta Ads pentru piața din România. Generează 3 variante distincte de ad copy pentru Facebook/Instagram în română.
@@ -578,7 +575,7 @@ Reguli stricte:
 
 Răspunde EXCLUSIV în JSON valid, fără text suplimentar:
 {"variants":[{"headline":"...","primary_text":"...","cta":"..."},{"headline":"...","primary_text":"...","cta":"..."},{"headline":"...","primary_text":"...","cta":"..."}]}`;
-      const fullPrompt = buildPromptWithBrand(basePrompt);
+      const fullPrompt = buildPromptWithBrand(basePrompt, true);
       const result = await callAIJson(fullPrompt);
       setAdCopy({ variants:result.variants, selected:0, error:null });
     } catch (e) {
@@ -591,7 +588,7 @@ Răspunde EXCLUSIV în JSON valid, fără text suplimentar:
   const generateNewsletter = async (count = 2) => {
     if (!selProd) { alert("Selectează un produs din Trends sau catalog"); return; }
     setLoading(true); setLoadMsg(`Generez ${count} variante newsletter...`);
-    ReactGA.event({ category: "AI", action: "generate_newsletter", label: selProd.name, value: count });
+    // ReactGA.event({ category: "AI", action: "generate_newsletter", label: selProd.name, value: count });
     try {
       const basePrompt = `Generează ${count} variante diferite de newsletter în română pentru produsul "${selProd.name}" (${selProd.price} RON).
 Descriere: ${selProd.desc}
@@ -611,7 +608,7 @@ Răspunde EXCLUSIV în JSON: {"variante":[{"subiect":"...","pre_header":"...","c
   const generateCarousel = async () => {
     if (!selProd) { alert("Selectează un produs"); return; }
     setLoading(true); setLoadMsg("Generez carusel și script video...");
-    ReactGA.event({ category: "AI", action: "generate_carousel", label: selProd.name });
+    // ReactGA.event({ category: "AI", action: "generate_carousel", label: selProd.name });
     try {
       const basePrompt = `Ești creator de conținut social media în România pentru produse naturiste. Creează pentru produsul "${selProd.name}" (${selProd.price} RON):
 
@@ -630,7 +627,7 @@ CTA 12-15s (max 35 caractere):
 Descriere produs: ${selProd.desc}
 
 Marchează clar secțiunile cu CARUSEL: și VIDEO:`;
-      const fullPrompt = buildPromptWithBrand(basePrompt);
+      const fullPrompt = buildPromptWithBrand(basePrompt, true);
       const result = await callAI(fullPrompt);
       setCarouselOut(result);
     } catch (e) { alert("Eroare: " + e.message); }
@@ -641,7 +638,7 @@ Marchează clar secțiunile cu CARUSEL: și VIDEO:`;
   const generateBlog = async () => {
     if (!selProd) { alert("Selectează un produs"); return; }
     setLoading(true); setLoadMsg("Generez articol blog SEO pentru Gomag...");
-    ReactGA.event({ category: "AI", action: "generate_blog", label: selProd.name });
+    // ReactGA.event({ category: "AI", action: "generate_blog", label: selProd.name });
     try {
       const basePrompt = `Ești expert SEO pentru platforma Gomag. Scrie un articol de blog complet în română pentru "${selProd.name}".
 
@@ -732,7 +729,7 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
   // Buffer post (draft)
   const postToBuffer = async (text) => {
     if (!text) { alert("Nu există text de postat."); return; }
-    ReactGA.event({ category: "Buffer", action: "post_draft", label: text.substring(0, 50) });
+    // ReactGA.event({ category: "Buffer", action: "post_draft", label: text.substring(0, 50) });
     try {
       const res = await fetch('/api/buffer-post', {
         method: 'POST',
@@ -742,20 +739,20 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
       const data = await res.json();
       if (res.ok) {
         alert('✅ Postare salvată ca draft în Buffer!');
-        ReactGA.event({ category: "Buffer", action: "post_success" });
+        // ReactGA.event({ category: "Buffer", action: "post_success" });
       } else {
         alert('❌ Eroare Buffer: ' + data.error);
-        ReactGA.event({ category: "Buffer", action: "post_error", label: data.error });
+        // ReactGA.event({ category: "Buffer", action: "post_error", label: data.error });
       }
     } catch (err) {
       alert('Eroare de rețea: ' + err.message);
-      ReactGA.event({ category: "Buffer", action: "post_network_error" });
+      // ReactGA.event({ category: "Buffer", action: "post_network_error" });
     }
   };
 
   // UI helpers
   const copyText = (text, id) => {
-    ReactGA.event({ category: "User", action: "copy", label: id });
+    // ReactGA.event({ category: "User", action: "copy", label: id });
     navigator.clipboard.writeText(text).then(() => { setCopied(id); setTimeout(() => setCopied(null), 2100); });
   };
   const CopyBtn = ({ text, id, style }) => (
