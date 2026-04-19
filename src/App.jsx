@@ -216,6 +216,49 @@ const syncCatalog = async (force = false) => {
   setLoading(false); setLoadMsg("");
 };
 
+// ── Manual CSV upload ────────────────────────────────────────────────
+const handleManualUpload = (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+  setLoading(true);
+  setLoadMsg("Procesez fișierul CSV încărcat...");
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const text = e.target.result;
+      const parsed = text.split("\n").slice(1).map(row => {
+        const cols = row.match(/"([^"]*)"|([^,]+)/g)?.map(c => c.replace(/^"|"$/g, "").trim()) || [];
+        if (cols.length < 4) return null;
+        return {
+          name: cols[0],
+          price: cols[1],
+          stoc: cols[2],
+          link: cols[3],
+          img: cols[4] || "",
+          desc: cols[5] || ""
+        };
+      }).filter(p => p?.name);
+      const today = new Date().toISOString().slice(0, 10);
+      setCatalog(parsed);
+      setCatalogDate(today);
+      lsSet("eb_catalog", parsed);
+      localStorage.setItem("eb_catalog_date", today);
+      alert(`✅ Catalog încărcat cu succes: ${parsed.length} produse`);
+    } catch (err) {
+      alert("Eroare la parsarea fișierului CSV: " + err.message);
+    } finally {
+      setLoading(false);
+      setLoadMsg("");
+    }
+  };
+  reader.onerror = () => {
+    alert("Eroare la citirea fișierului");
+    setLoading(false);
+    setLoadMsg("");
+  };
+  reader.readAsText(file, "UTF-8");
+};
+
   // ── Daily trends ─────────────────────────────────────────────────────
   const generateTrends = async (force = false) => {
     if (!catalog.length) { alert("Sincronizează catalogul mai întâi (tab 📂 Sync)"); return; }
@@ -587,34 +630,84 @@ const adTutorial = () => {
         {/* ══════════════════════════════════════════════════
             TAB: SYNC
         ══════════════════════════════════════════════════ */}
-        {tab==="sync" && (
-          <div className="card" style={{ textAlign:"center", padding:"44px 24px" }}>
-            <div style={{ fontSize:44, marginBottom:16 }}>📂</div>
-            <h2 style={{ fontFamily:"'Bricolage Grotesque'", marginBottom:10 }}>Sincronizare Catalog</h2>
-            <p style={{ color:C.muted, fontSize:14, marginBottom:8, lineHeight:1.7, maxWidth:480, margin:"0 auto 24px" }}>
-              Importă produsele din CSV-ul generat zilnic de scriptul Google Sheets.<br/>
-              Fișierul conține: denumire, preț final, stoc, link, poză, descriere.
-            </p>
-            {catalogDate && (
-              <div style={{ color:C.muted, fontSize:12, marginBottom:20 }}>
-                Ultima sincronizare: <strong style={{ color:C.accent }}>{catalogDate}</strong>
-              </div>
-            )}
-            <div style={{ display:"flex", gap:10, justifyContent:"center", flexWrap:"wrap" }}>
-              <button className="btn-p" onClick={() => syncCatalog(true)}>🔄 Sincronizează acum</button>
-              {catalog.length > 0 && (
-                <button className="btn-s" onClick={() => setTab("trends")}>Mergi la Trends →</button>
-              )}
-            </div>
-            {catalog.length > 0 && (
-              <div style={{ marginTop:24, display:"inline-flex", gap:20, padding:"14px 24px", background:C.accentDim, border:`1px solid ${C.accentBorder}`, borderRadius:12 }}>
-                <span><strong style={{ color:C.accent }}>{catalog.length}</strong> <span style={{ color:C.muted, fontSize:13 }}>produse totale</span></span>
-                <span><strong style={{ color:"#4ade80" }}>{catalog.filter(p=>p.stoc==="instock").length}</strong> <span style={{ color:C.muted, fontSize:13 }}>în stoc</span></span>
-                <span><strong style={{ color:C.warn }}>{catalog.filter(p=>p.stoc!=="instock").length}</strong> <span style={{ color:C.muted, fontSize:13 }}>fără stoc</span></span>
-              </div>
-            )}
-          </div>
+{tab === "sync" && (
+  <div className="card" style={{ textAlign: "center", padding: "44px 24px" }}>
+    <div style={{ fontSize: 44, marginBottom: 16 }}>📂</div>
+    <h2 style={{ fontFamily: "'Bricolage Grotesque'", marginBottom: 10 }}>Sincronizare Catalog</h2>
+    <p style={{ color: C.muted, fontSize: 14, marginBottom: 8, lineHeight: 1.7, maxWidth: 480, margin: "0 auto 24px" }}>
+      Importă produsele din CSV-ul generat de scriptul tău Google Sheets.<br/>
+      Poți folosi fie link-ul public de pe Drive, fie încărca fișierul direct.
+    </p>
+
+    {/* Afișează data ultimei sincronizări */}
+    {catalogDate && (
+      <div style={{ color: C.muted, fontSize: 12, marginBottom: 20 }}>
+        Ultima sincronizare: <strong style={{ color: C.accent }}>{catalogDate}</strong>
+      </div>
+    )}
+
+    {/* Secțiunea URL */}
+    <div style={{ marginBottom: 32 }}>
+      <div style={{ fontWeight: 600, marginBottom: 8, color: C.sub }}>🔗 Sincronizare automată (URL)</div>
+      <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+        <button className="btn-p" onClick={() => syncCatalog(true)}>🔄 Sincronizează din URL</button>
+        {catalog.length > 0 && (
+          <button className="btn-s" onClick={() => setTab("trends")}>Mergi la Trends →</button>
         )}
+      </div>
+      <div style={{ fontSize: 12, color: C.muted, marginTop: 8 }}>
+        URL-ul se configurează în <strong>⚙️ Setări</strong> – folosește link-ul direct de descărcare:<br/>
+        <code style={{ background: "#0a0a1a", padding: "2px 6px", borderRadius: 6 }}>https://drive.google.com/uc?export=download&id=ID_FISIER</code>
+      </div>
+    </div>
+
+    <div style={{ borderTop: `1px solid ${C.border}`, margin: "16px auto", width: "80%" }} />
+
+    {/* Secțiunea upload manual */}
+    <div>
+      <div style={{ fontWeight: 600, marginBottom: 8, color: C.sub }}>📁 Încărcare manuală (CSV)</div>
+      <input
+        type="file"
+        accept=".csv"
+        onChange={handleManualUpload}
+        style={{ display: "none" }}
+        id="csv-upload-input"
+      />
+      <label
+        htmlFor="csv-upload-input"
+        style={{
+          display: "inline-block",
+          background: C.accentDim,
+          border: `1px solid ${C.accentBorder}`,
+          padding: "10px 22px",
+          borderRadius: 9,
+          cursor: "pointer",
+          fontSize: 14,
+          fontWeight: 600,
+          color: C.accent,
+          transition: "all 0.2s"
+        }}
+        onMouseEnter={e => e.currentTarget.style.background = "rgba(110,231,183,0.2)"}
+        onMouseLeave={e => e.currentTarget.style.background = C.accentDim}
+      >
+        📂 Alege fișier CSV
+      </label>
+      <div style={{ fontSize: 12, color: C.muted, marginTop: 10 }}>
+        Fișierul trebuie să aibă coloanele: <strong>nume, preț, stoc, link, imagine, descriere</strong><br/>
+        (separator virgulă, suportă ghilimele duble)
+      </div>
+    </div>
+
+    {/* Statistici rapide dacă există catalog */}
+    {catalog.length > 0 && (
+      <div style={{ marginTop: 32, display: "inline-flex", gap: 20, padding: "14px 24px", background: C.accentDim, border: `1px solid ${C.accentBorder}`, borderRadius: 12 }}>
+        <span><strong style={{ color: C.accent }}>{catalog.length}</strong> <span style={{ color: C.muted, fontSize: 13 }}>produse totale</span></span>
+        <span><strong style={{ color: "#4ade80" }}>{catalog.filter(p => p.stoc === "instock").length}</strong> <span style={{ color: C.muted, fontSize: 13 }}>în stoc</span></span>
+        <span><strong style={{ color: C.warn }}>{catalog.filter(p => p.stoc !== "instock").length}</strong> <span style={{ color: C.muted, fontSize: 13 }}>fără stoc</span></span>
+      </div>
+    )}
+  </div>
+)}
 
         {/* ══════════════════════════════════════════════════
             TAB: TRENDS
