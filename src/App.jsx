@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import ReactGA from "react-ga4";
+// import ReactGA from "react-ga4";   // șterge sau comentează
 
 // ─── Config ───────────────────────────────────────────────────────────
 const LS_KEY = "ecobites_hub_v4";
@@ -78,18 +78,18 @@ export default function EcoBitesHub() {
   const saved = loadCfg();
 
   // Inițializare Google Analytics
-  useEffect(() => {
-    if (import.meta.env.VITE_GA_MEASUREMENT_ID) {
-      ReactGA.initialize(import.meta.env.VITE_GA_MEASUREMENT_ID);
-    } else {
-      console.warn("GA Measurement ID not set – analytics will not work.");
-    }
-  }, []);
+// useEffect(() => {
+//   if (import.meta.env.VITE_GA_MEASUREMENT_ID) {
+//     ReactGA.initialize(import.meta.env.VITE_GA_MEASUREMENT_ID);
+//   } else {
+//     console.warn("GA Measurement ID not set");
+//   }
+// }, []);
 
   // Trimite page view la schimbarea tab-ului
-  useEffect(() => {
-    ReactGA.send({ hitType: "pageview", page: tab });
-  }, [tab]);
+// useEffect(() => {
+//   ReactGA.send({ hitType: "pageview", page: tab });
+// }, [tab]);
 
   // ── Settings state ──────────────────────────────────────────────────
   const [showSettings, setShowSettings] = useState(false);
