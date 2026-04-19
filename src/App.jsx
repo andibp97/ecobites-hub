@@ -395,87 +395,88 @@ export default function EcoBitesHub() {
   };
 
   // Manual upload (CSV, XLSX, XLS)
-  const handleManualUpload = (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-    setLoading(true);
-    setLoadMsg("Procesez fișierul încărcat...");
-    const extension = file.name.split('.').pop().toLowerCase();
-    const reader = new FileReader();
+ const handleManualUpload = (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+  setLoading(true);
+  setLoadMsg("Procesez fișierul încărcat...");
+  const extension = file.name.split('.').pop().toLowerCase();
+  const reader = new FileReader();
 
-    reader.onload = (e) => {
-      try {
-        let parsed;
-        if (extension === 'csv') {
-          const text = e.target.result;
-          parsed = parseCSVWithHeaders(text);
-} else {
-  // Parsare Excel (xlsx, xls)
-  const workbook = XLSX.read(e.target.result, { type: 'binary' });
-  const sheetName = workbook.SheetNames[0];
-  const sheet = workbook.Sheets[sheetName];
-  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
-  if (!rows || rows.length < 2) throw new Error("Fișierul nu conține date");
-  const headers = rows[0].map(cell => String(cell || "").trim());
-  const colIndex = {
-    nume: headers.findIndex(h => h === "Denumire Produs"),
-    brand: headers.findIndex(h => h === "Marca (Brand)"),
-    descriere: headers.findIndex(h => h === "Descriere Produs"),
-    descriereScurta: headers.findIndex(h => h === "Descriere Scurta a Produsului"),
-    pret: headers.findIndex(h => h === "Pret"),
-    imagine: headers.findIndex(h => h === "Imagine principala"),
-    url: headers.findIndex(h => h === "Url")
-  };
-  if (colIndex.nume === -1) colIndex.nume = 0;
-  if (colIndex.pret === -1) colIndex.pret = 5;
-  if (colIndex.url === -1) colIndex.url = 7;
-  if (colIndex.imagine === -1) colIndex.imagine = 6;
-  if (colIndex.descriere === -1) colIndex.descriere = 3;
-  if (colIndex.brand === -1) colIndex.brand = 2;
+  reader.onload = (e) => {
+    try {
+      let parsed;
+      if (extension === 'csv') {
+        const text = e.target.result;
+        parsed = parseCSVWithHeaders(text);
+      } else {
+        // Excel
+        const workbook = XLSX.read(e.target.result, { type: 'binary' });
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+        if (!rows || rows.length < 2) throw new Error("Fișierul nu conține date");
+        const headers = rows[0].map(cell => String(cell || "").trim());
+        const colIndex = {
+          nume: headers.findIndex(h => h === "Denumire Produs"),
+          brand: headers.findIndex(h => h === "Marca (Brand)"),
+          descriere: headers.findIndex(h => h === "Descriere Produs"),
+          descriereScurta: headers.findIndex(h => h === "Descriere Scurta a Produsului"),
+          pret: headers.findIndex(h => h === "Pret"),
+          imagine: headers.findIndex(h => h === "Imagine principala"),
+          url: headers.findIndex(h => h === "Url")
+        };
+        if (colIndex.nume === -1) colIndex.nume = 0;
+        if (colIndex.pret === -1) colIndex.pret = 5;
+        if (colIndex.url === -1) colIndex.url = 7;
+        if (colIndex.imagine === -1) colIndex.imagine = 6;
+        if (colIndex.descriere === -1) colIndex.descriere = 3;
+        if (colIndex.brand === -1) colIndex.brand = 2;
 
-  const parsed = rows.slice(1).map(row => {
-    const name = row[colIndex.nume] ? String(row[colIndex.nume]).trim() : "";
-    if (!name) return null;
-    let priceStr = String(row[colIndex.pret] || "0").replace(',', '.');
-    const price = parseFloat(priceStr);
-    if (isNaN(price) || price <= 0) return null;
-    const brand = row[colIndex.brand] ? String(row[colIndex.brand]).trim() : "";
-    const desc = row[colIndex.descriere] ? String(row[colIndex.descriere]).trim() : "";
-    const shortDesc = row[colIndex.descriereScurta] ? String(row[colIndex.descriereScurta]).trim() : "";
-    const fullDesc = (desc + " " + shortDesc).trim();
-    const link = row[colIndex.url] ? String(row[colIndex.url]).trim() : "";
-    const img = row[colIndex.imagine] ? String(row[colIndex.imagine]).trim() : "";
-    return { name, price, stoc: "instock", link, img, desc: fullDesc, brand };
-  }).filter(p => p);
-  parsed = parsed; // asignare
-}
-
-        const filtered = parsed.filter(p => p.price >= priceMin && p.price <= priceMax);
-        const today = new Date().toISOString().slice(0,10);
-        setCatalog(filtered);
-        setCatalogDate(today);
-        lsSet("eb_catalog", filtered);
-        localStorage.setItem("eb_catalog_date", today);
-        alert(`✅ Catalog încărcat cu succes: ${filtered.length} produse`);
-      } catch (err) {
-        console.error(err);
-        alert("Eroare la parsarea fișierului: " + err.message);
-      } finally {
-        setLoading(false);
-        setLoadMsg("");
+        parsed = rows.slice(1).map(row => {
+          const name = row[colIndex.nume] ? String(row[colIndex.nume]).trim() : "";
+          if (!name) return null;
+          let priceStr = String(row[colIndex.pret] || "0").replace(',', '.');
+          const price = parseFloat(priceStr);
+          if (isNaN(price) || price <= 0) return null;
+          const brand = row[colIndex.brand] ? String(row[colIndex.brand]).trim() : "";
+          const desc = row[colIndex.descriere] ? String(row[colIndex.descriere]).trim() : "";
+          const shortDesc = row[colIndex.descriereScurta] ? String(row[colIndex.descriereScurta]).trim() : "";
+          const fullDesc = (desc + " " + shortDesc).trim();
+          const link = row[colIndex.url] ? String(row[colIndex.url]).trim() : "";
+          const img = row[colIndex.imagine] ? String(row[colIndex.imagine]).trim() : "";
+          return { name, price, stoc: "instock", link, img, desc: fullDesc, brand };
+        }).filter(p => p);
       }
-    };
-    reader.onerror = () => {
-      alert("Eroare la citirea fișierului");
+
+      const filtered = parsed.filter(p => p.price >= priceMin && p.price <= priceMax);
+      const today = new Date().toISOString().slice(0, 10);
+      setCatalog(filtered);
+      setCatalogDate(today);
+      lsSet("eb_catalog", filtered);
+      localStorage.setItem("eb_catalog_date", today);
+      alert(`✅ Catalog încărcat cu succes: ${filtered.length} produse`);
+    } catch (err) {
+      console.error(err);
+      alert("Eroare la parsarea fișierului: " + err.message);
+    } finally {
       setLoading(false);
       setLoadMsg("");
-    };
-    if (extension === 'csv') {
-      reader.readAsText(file, "UTF-8");
-    } else {
-      reader.readAsBinaryString(file);
     }
   };
+
+  reader.onerror = () => {
+    alert("Eroare la citirea fișierului");
+    setLoading(false);
+    setLoadMsg("");
+  };
+
+  if (extension === 'csv') {
+    reader.readAsText(file, "UTF-8");
+  } else {
+    reader.readAsBinaryString(file);
+  }
+};
 
   // Generate trends (10 produse)
   const generateTrends = async (force = false) => {
