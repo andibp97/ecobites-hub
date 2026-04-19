@@ -186,35 +186,27 @@ export default function EcoBitesHub() {
     return JSON.parse(raw.replace(/```json\n?/g,"").replace(/```\n?/g,"").trim());
   };
 
-// ── Catalog sync ─────────────────────────────────────────────────────
-const syncCatalog = async (force = false) => {
-  if (!feedUrl) { alert("Adaugă URL-ul CSV în ⚙️ Setări"); return; }
-  const today = new Date().toISOString().slice(0,10);
-  if (!force && catalogDate === today && catalog.length > 0) return;
-  setLoading(true); setLoadMsg("Sincronizez catalogul...");
-  try {
-    // Construiește URL-ul final folosind proxy-ul pentru linkuri Google Drive
-    let finalUrl = feedUrl;
-    const isGoogleDrive = feedUrl.includes('drive.google.com') || feedUrl.includes('googleusercontent.com');
-    if (isGoogleDrive) {
-      // Folosește proxy-ul intern /api/proxy-csv
-      finalUrl = `/api/proxy-csv?url=${encodeURIComponent(feedUrl)}`;
-    }
-    
-    const res = await fetch(finalUrl);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const text = await res.text();
-    const parsed = text.split("\n").slice(1).map(row => {
-      const cols = row.match(/"([^"]*)"|([^,]+)/g)?.map(c => c.replace(/^"|"$/g,"").trim()) || [];
-      if (cols.length < 4) return null;
-      return { name:cols[0], price:cols[1], stoc:cols[2], link:cols[3], img:cols[4]||"", desc:cols[5]||"" };
-    }).filter(p => p?.name);
-    setCatalog(parsed); setCatalogDate(today);
-    lsSet("eb_catalog", parsed);
-    localStorage.setItem("eb_catalog_date", today);
-  } catch (e) { alert("Eroare sync: " + e.message); }
-  setLoading(false); setLoadMsg("");
-};
+  // ── Catalog sync ─────────────────────────────────────────────────────
+  const syncCatalog = async (force = false) => {
+    if (!feedUrl) { alert("Adaugă URL-ul CSV în ⚙️ Setări"); return; }
+    const today = new Date().toISOString().slice(0,10);
+    if (!force && catalogDate === today && catalog.length > 0) return;
+    setLoading(true); setLoadMsg("Sincronizez catalogul...");
+    try {
+      const res = await fetch(feedUrl);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const text = await res.text();
+      const parsed = text.split("\n").slice(1).map(row => {
+        const cols = row.match(/"([^"]*)"|([^,]+)/g)?.map(c => c.replace(/^"|"$/g,"").trim()) || [];
+        if (cols.length < 4) return null;
+        return { name:cols[0], price:cols[1], stoc:cols[2], link:cols[3], img:cols[4]||"", desc:cols[5]||"" };
+      }).filter(p => p?.name);
+      setCatalog(parsed); setCatalogDate(today);
+      lsSet("eb_catalog", parsed);
+      localStorage.setItem("eb_catalog_date", today);
+    } catch (e) { alert("Eroare sync: " + e.message); }
+    setLoading(false); setLoadMsg("");
+  };
 
   // ── Daily trends ─────────────────────────────────────────────────────
   const generateTrends = async (force = false) => {
@@ -350,32 +342,33 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
     setLoading(false); setLoadMsg("");
   };
 
-const adTutorial = () => {
-  const iList = targeting.interests.length ? targeting.interests.slice(0,5).join(", ") : "produse naturale, alimentație bio, sănătate & wellness";
-  const gLabel = {all:"Toate genurile",female:"Femei",male:"Bărbați"}[targeting.gender];
-  return [
-    { title:"Deschide Ads Manager",           instruction:'adsmanager.facebook.com → butonul „+ Creare"' },
-    { title:"Alege obiectivul",                instruction:`Selectează „${selectedObj && selectedObj.metaName}" din cele 6 opțiuni`, detail: (selectedObj && selectedObj.id === "traffic") ? `💡 Poate apărea ca „Link clicks" — același lucru.` : null },
-    { title:"Denumește campania",              instruction:`EcoBites — ${adProd.name} — ${selectedObj && selectedObj.label}`, copy:`EcoBites — ${adProd.name} — ${selectedObj && selectedObj.label}` },
-    { title:"Next → Ad Set",                   instruction:"Apasă Next — ajungi la nivelul de targeting și buget" },
-    { title:"Locație",                         instruction:'La „Locations" → șterge implicit → scrie „Romania" → selectează', detail:'Lasă „People living in or recently in this location".' },
-    { title:"Vârstă & Gen",                    instruction:`${targeting.ageMin}–${targeting.ageMax} ani · ${gLabel}`, detail: `💡 La start lasă „Toate" — Meta optimizează el.` },
-    { title:"Interese (Detailed Targeting)",   instruction:`Caută și adaugă: ${iList}`, detail:"3-5 interese maxim. Prea multe diluează audiența.", copy:iList },
-    { title:"Buget zilnic",                    instruction:`Daily budget → ${daily} EUR (≈ ${dailyRON} RON)`, detail:`Total ${targeting.durationDays} zile: ${targeting.budgetMonthly} EUR. Nu folosi Lifetime budget la start.` },
-    { title:"Programare",                      instruction:`Start: azi · End: peste ${targeting.durationDays} zile`, detail:"Sau fără end date — oprești manual după ce analizezi datele." },
-    { title:"Next → Ad",                       instruction:"Apasă Next — ajungi la nivelul Ad (creația propriu-zisă)" },
-    { title:"Format",                          instruction:"Selectează: Single image or video" },
-    ...(selectedAd ? [
-      { title:"Primary Text",  instruction:selectedAd.primary_text,  detail:"Paste direct, cu tot cu emoji.",       copy:selectedAd.primary_text  },
-      { title:"Headline",      instruction:selectedAd.headline,       detail:"Apare bold sub imagine.",              copy:selectedAd.headline      },
-      { title:"CTA Button",    instruction:`La „Call to action" selectează: „${selectedAd.cta}"` },
-    ] : []),
-    { title:"Website URL",                     instruction:adProd.link, copy:adProd.link },
-    { title:"Upload vizual",                   instruction:"Media → Add media → uploadează imaginea", detail:"1080×1080px ideal. Text < 20% din suprafața imaginii." },
-    { title:"Preview & Publish",               instruction:'Verifică preview Mobile & Desktop → apasă „Publish"', detail:"⚠️ Nu edita ad-ul în primele 48h — resetezi learning phase-ul algoritmului." },
-    { title:"Monitorizare (după 3 zile)",       instruction:"CTR > 1% = bun · CPM < 20 RON = decent pentru România", detail:"CTR < 0.5% după 3 zile → testează alt vizual sau alt text." },
-  ];
-};
+  // ── Tutorial Meta ─────────────────────────────────────────────────────
+  const adTutorial = () => {
+    const iList = targeting.interests.length ? targeting.interests.slice(0,5).join(", ") : "produse naturale, alimentație bio, sănătate & wellness";
+    const gLabel = {all:"Toate genurile",female:"Femei",male:"Bărbați"}[targeting.gender];
+    return [
+      { title:"Deschide Ads Manager",           instruction:'adsmanager.facebook.com → butonul „+ Creare"' },
+      { title:"Alege obiectivul",                instruction:`Selectează „${selectedObj?.metaName}" din cele 6 opțiuni`, detail: selectedObj?.id==="traffic"?"💡 Poate apărea ca „Link clicks" — același lucru.":null },
+      { title:"Denumește campania",              instruction:`EcoBites — ${adProd.name} — ${selectedObj?.label}`, copy:`EcoBites — ${adProd.name} — ${selectedObj?.label}` },
+      { title:"Next → Ad Set",                   instruction:"Apasă Next — ajungi la nivelul de targeting și buget" },
+      { title:"Locație",                         instruction:'La „Locations" → șterge implicit → scrie „Romania" → selectează', detail:'Lasă „People living in or recently in this location".' },
+      { title:"Vârstă & Gen",                    instruction:`${targeting.ageMin}–${targeting.ageMax} ani · ${gLabel}`, detail:"💡 La start lasă „Toate" — Meta optimizează el." },
+      { title:"Interese (Detailed Targeting)",   instruction:`Caută și adaugă: ${iList}`, detail:"3-5 interese maxim. Prea multe diluează audiența.", copy:iList },
+      { title:"Buget zilnic",                    instruction:`Daily budget → ${daily} EUR (≈ ${dailyRON} RON)`, detail:`Total ${targeting.durationDays} zile: ${targeting.budgetMonthly} EUR. Nu folosi Lifetime budget la start.` },
+      { title:"Programare",                      instruction:`Start: azi · End: peste ${targeting.durationDays} zile`, detail:"Sau fără end date — oprești manual după ce analizezi datele." },
+      { title:"Next → Ad",                       instruction:"Apasă Next — ajungi la nivelul Ad (creația propriu-zisă)" },
+      { title:"Format",                          instruction:"Selectează: Single image or video" },
+      ...(selectedAd ? [
+        { title:"Primary Text",  instruction:selectedAd.primary_text,  detail:"Paste direct, cu tot cu emoji.",       copy:selectedAd.primary_text  },
+        { title:"Headline",      instruction:selectedAd.headline,       detail:"Apare bold sub imagine.",              copy:selectedAd.headline      },
+        { title:"CTA Button",    instruction:`La „Call to action" selectează: „${selectedAd.cta}"` },
+      ] : []),
+      { title:"Website URL",                     instruction:adProd.link, copy:adProd.link },
+      { title:"Upload vizual",                   instruction:"Media → Add media → uploadează imaginea", detail:"1080×1080px ideal. Text < 20% din suprafața imaginii." },
+      { title:"Preview & Publish",               instruction:'Verifică preview Mobile & Desktop → apasă „Publish"', detail:"⚠️ Nu edita ad-ul în primele 48h — resetezi learning phase-ul algoritmului." },
+      { title:"Monitorizare (după 3 zile)",       instruction:"CTR > 1% = bun · CPM < 20 RON = decent pentru România", detail:"CTR < 0.5% după 3 zile → testează alt vizual sau alt text." },
+    ];
+  };
 
   // ── UI helpers ───────────────────────────────────────────────────────
   const copyText = (text, id) => {
@@ -636,12 +629,12 @@ const adTutorial = () => {
             </div>
 
             {!trends ? (
-  <div className="card" style={{ textAlign:"center", color:C.muted, padding:"48px 24px", fontSize:14 }}>
-    {!catalog.length
-      ? <>Sincronizează mai întâi catalogul →{" "}<button className="btn-s btn-sm" onClick={() => setTab("sync")}>tab Sync</button></>
-      : `Apasă „Generează recomandări" pentru analiza zilei de azi`}
-  </div>
-) : (
+              <div className="card" style={{ textAlign:"center", color:C.muted, padding:"48px 24px", fontSize:14 }}>
+                {!catalog.length
+                  ? <>Sincronizează mai întâi catalogul →{" "}<button className="btn-s btn-sm" onClick={() => setTab("sync")}>tab Sync</button></>
+                  : "Apasă „Generează recomandări" pentru analiza zilei de azi"}
+              </div>
+            ) : (
               <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
                 {trends.map((item, i) => {
                   const prod = catalog.find(p=>p.name===item.nume || p.name.includes(item.nume.substring(0,18))) || { name:item.nume, price:"?", img:"", link:"", desc:"", stoc:"" };
