@@ -283,15 +283,19 @@ export default function EcoBitesHub() {
     }
   };
 
-  const callAIJson = async (prompt) => {
-    const raw = await callAI(prompt);
-    console.log("Răspuns brut de la AI:", raw);
-    const match = raw.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error("Nu s-a găsit JSON în răspunsul AI");
-    let jsonStr = match[0];
-    jsonStr = jsonStr.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-    return JSON.parse(jsonStr);
-  };
+const callAIJson = async (prompt) => {
+  const raw = await callAI(prompt);
+  console.log("Răspuns brut de la AI:", raw);
+  // Încearcă să extragă JSON-ul dintre acolade
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) {
+    // Dacă nu găsește JSON, aruncă un error care include primele 200 caractere din răspuns
+    throw new Error(`AI nu a returnat JSON valid. Primele 200 caractere: ${raw.substring(0, 200)}`);
+  }
+  let jsonStr = match[0];
+  jsonStr = jsonStr.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+  return JSON.parse(jsonStr);
+};
 
   const buildPromptWithBrand = (basePrompt, withHashtags = false) => {
     let brandContext = "";
