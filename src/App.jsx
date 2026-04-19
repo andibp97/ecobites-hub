@@ -260,15 +260,20 @@ const handleManualUpload = (event) => {
 };
 
   // ── Daily trends ─────────────────────────────────────────────────────
-  const generateTrends = async (force = false) => {
-    if (!catalog.length) { alert("Sincronizează catalogul mai întâi (tab 📂 Sync)"); return; }
-    const today = new Date().toISOString().slice(0,10);
-    if (!force && trendsDate === today && trends) return;
-    setLoading(true); setLoadMsg("Analizez catalogul — top 15 produse pentru azi...");
-    try {
-      const month  = new Date().toLocaleString("ro-RO", {month:"long"});
-      const sample = catalog.slice(0,120).map(p=>`${p.name} | ${p.price} RON | ${p.desc.substring(0,110)}`).join("\n");
-      const prompt = `Ești expert marketing și SEO pentru produse naturiste în România.
+const generateTrends = async (force = false) => {
+  if (!catalog.length) { alert("Sincronizează catalogul mai întâi (tab 📂 Sync)"); return; }
+  const today = new Date().toISOString().slice(0,10);
+  if (!force && trendsDate === today && trends) return;
+  
+  // Pauză de 2 secunde pentru a evita 429 Too Many Requests
+  await new Promise(resolve => setTimeout(resolve, 2000));
+  
+  setLoading(true); setLoadMsg("Analizez catalogul — top 15 produse pentru azi...");
+  try {
+    const month  = new Date().toLocaleString("ro-RO", {month:"long"});
+    // Reducem eșantionul la maxim 30 de produse
+    const sample = catalog.slice(0,30).map(p=>`${p.name} | ${p.price} RON | ${p.desc.substring(0,110)}`).join("\n");
+    const prompt = `Ești expert marketing și SEO pentru produse naturiste în România.
 Luna curentă: ${month}. Analizează catalogul și selectează EXACT 15 produse cu cel mai mare potențial de vânzare acum, bazat pe sezonalitate, beneficii, și cerere tipică pentru ${month} în România.
 
 Pentru fiecare produs oferă:
@@ -281,16 +286,18 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
 
 Catalog (nume | preț | descriere):
 ${sample}`;
-      const result = await callAIJson(prompt);
-      if (result?.recomandari) {
-        setTrends(result.recomandari); setTrendsDate(today);
-        lsSet("eb_trends", result.recomandari);
-        localStorage.setItem("eb_trends_date", today);
-      }
-    } catch (e) { alert("Eroare trends: " + e.message); }
-    setLoading(false); setLoadMsg("");
-  };
-
+    const result = await callAIJson(prompt);
+    if (result?.recomandari) {
+      setTrends(result.recomandari); setTrendsDate(today);
+      lsSet("eb_trends", result.recomandari);
+      localStorage.setItem("eb_trends_date", today);
+    }
+  } catch (e) { 
+    console.error("Eroare trends detaliată:", e);
+    alert("Eroare trends: " + (e.message || e.toString())); 
+  }
+  setLoading(false); setLoadMsg("");
+};
   // ── Ad copy ──────────────────────────────────────────────────────────
   const generateAdCopy = async () => {
     const p = adProd;
