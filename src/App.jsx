@@ -35,20 +35,15 @@ const INTERESTS = [
   "Remedii naturiste","Superalimente","Apicultură","Ayurveda",
 ];
 
-// Modele OpenRouter curatoriate (user poate adăuga orice custom)
+// Modele OpenRouter actualizate – doar cele confirmate funcționale (inclusiv gpt-oss-120b:free)
 const OR_MODELS = [
-  { id:"google/gemini-2.0-flash-exp:free",       label:"Gemini 2.0 Flash",       tag:"FREE"  },
-  { id:"meta-llama/llama-4-scout:free",           label:"Llama 4 Scout",          tag:"FREE"  },
-  { id:"deepseek/deepseek-chat-v3-0324:free",     label:"DeepSeek V3",            tag:"FREE"  },
-  { id:"nvidia/nemotron-3-super-120b-a12b:free",  label:"Nemotron 120B",          tag:"FREE"  },
-  { id:"google/gemma-4-31b-it:free",              label:"Gemma 4 31B",            tag:"FREE"  },
-  { id:"qwen/qwen3-235b-a22b:free",               label:"Qwen3 235B",             tag:"FREE"  },
-  { id:"google/gemini-2.0-flash-001",             label:"Gemini 2.0 Flash (paid)",tag:"CHEAP" },
-  { id:"deepseek/deepseek-chat",                  label:"DeepSeek Chat",          tag:"CHEAP" },
-  { id:"meta-llama/llama-3.3-70b-instruct",       label:"Llama 3.3 70B",          tag:"CHEAP" },
-  { id:"anthropic/claude-haiku-4-5",              label:"Claude Haiku 4.5",       tag:"CHEAP" },
-  { id:"openai/gpt-4o-mini",                      label:"GPT-4o Mini",            tag:"CHEAP" },
-  { id:"mistralai/mistral-small-3.1-24b-instruct",label:"Mistral Small 3.1",      tag:"CHEAP" },
+  { id:"google/gemma-4-31b-it:free",              label:"Gemma 4 31B (free)",      tag:"FREE"  },
+  { id:"openai/gpt-oss-120b:free",                label:"GPT-OSS 120B (free?)",    tag:"FREE"  },
+  { id:"deepseek/deepseek-chat",                  label:"DeepSeek Chat",           tag:"CHEAP" },
+  { id:"meta-llama/llama-3.3-70b-instruct",       label:"Llama 3.3 70B",           tag:"CHEAP" },
+  { id:"anthropic/claude-haiku-4-5",              label:"Claude Haiku 4.5",        tag:"CHEAP" },
+  { id:"openai/gpt-4o-mini",                      label:"GPT-4o Mini",             tag:"CHEAP" },
+  { id:"mistralai/mistral-small-3.1-24b-instruct",label:"Mistral Small 3.1",       tag:"CHEAP" },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────
@@ -65,6 +60,7 @@ export default function EcoBitesHub() {
   const [showSettings, setShowSettings] = useState(false);
   const [provider,     setProvider]     = useState(saved.provider    || "anthropic");
   const [geminiKey,    setGeminiKey]    = useState(saved.geminiKey   || "");
+  const [geminiModel,  setGeminiModel]  = useState(saved.geminiModel || "gemini-2.0-flash");
   const [orKey,        setOrKey]        = useState(saved.orKey       || "");
   const [orModel,      setOrModel]      = useState(saved.orModel     || OR_MODELS[0].id);
   const [orCustom,     setOrCustom]     = useState(saved.orCustom    || "");
@@ -106,10 +102,10 @@ export default function EcoBitesHub() {
 
   const adImgRef = useRef();
 
-  // Save settings on change
+  // Save settings on change (include geminiModel)
   useEffect(() => {
-    saveCfg({ provider, geminiKey, orKey, orModel, orCustom, hfKey, hfModel, feedUrl, bufferKey });
-  }, [provider, geminiKey, orKey, orModel, orCustom, hfKey, hfModel, feedUrl, bufferKey]);
+    saveCfg({ provider, geminiKey, geminiModel, orKey, orModel, orCustom, hfKey, hfModel, feedUrl, bufferKey });
+  }, [provider, geminiKey, geminiModel, orKey, orModel, orCustom, hfKey, hfModel, feedUrl, bufferKey]);
 
   const activeOrModel  = orCustom.trim() || orModel;
   const selectedObj    = OBJECTIVES.find(o => o.id === objective);
@@ -120,7 +116,7 @@ export default function EcoBitesHub() {
 
   const providerBadge = {
     anthropic:  "Claude Sonnet (artifact)",
-    gemini:     "Gemini Flash",
+    gemini:     `Gemini · ${geminiModel === "gemini-2.5-flash" ? "2.5 Flash" : "2.0 Flash"}`,
     openrouter: `OR · ${activeOrModel.split("/")[1]?.split(":")[0] || activeOrModel}`,
     huggingface:`HF · ${hfModel.split("/")[1] || hfModel}`,
   }[provider] || provider;
@@ -138,7 +134,8 @@ export default function EcoBitesHub() {
 
   const callGemini = async (prompt) => {
     if (!geminiKey) throw new Error("Lipsă cheie Gemini — adaugă în ⚙️ Setări");
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`, {
+    const model = geminiModel === "gemini-2.5-flash" ? "gemini-2.5-flash" : "gemini-2.0-flash";
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`, {
       method:"POST", headers:{"Content-Type":"application/json"},
       body: JSON.stringify({ contents:[{parts:[{text:prompt}]}], generationConfig:{temperature:0.7, maxOutputTokens:2048} }),
     });
@@ -183,97 +180,99 @@ export default function EcoBitesHub() {
 
   const callAIJson = async (prompt) => {
     const raw = await callAI(prompt);
-    return JSON.parse(raw.replace(/```json\n?/g,"").replace(/```\n?/g,"").trim());
+    console.log("Răspuns brut de la AI:", raw);
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error("Nu s-a găsit JSON în răspunsul AI");
+    let jsonStr = match[0];
+    jsonStr = jsonStr.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+    return JSON.parse(jsonStr);
   };
 
-// ── Catalog sync ─────────────────────────────────────────────────────
-const syncCatalog = async (force = false) => {
-  if (!feedUrl) { alert("Adaugă URL-ul CSV în ⚙️ Setări"); return; }
-  const today = new Date().toISOString().slice(0,10);
-  if (!force && catalogDate === today && catalog.length > 0) return;
-  setLoading(true); setLoadMsg("Sincronizez catalogul...");
-  try {
-    // Construiește URL-ul final folosind proxy-ul pentru linkuri Google Drive
-    let finalUrl = feedUrl;
-    const isGoogleDrive = feedUrl.includes('drive.google.com') || feedUrl.includes('googleusercontent.com');
-    if (isGoogleDrive) {
-      // Folosește proxy-ul intern /api/proxy-csv
-      finalUrl = `/api/proxy-csv?url=${encodeURIComponent(feedUrl)}`;
-    }
-    
-    const res = await fetch(finalUrl);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const text = await res.text();
-    const parsed = text.split("\n").slice(1).map(row => {
-      const cols = row.match(/"([^"]*)"|([^,]+)/g)?.map(c => c.replace(/^"|"$/g,"").trim()) || [];
-      if (cols.length < 4) return null;
-      return { name:cols[0], price:cols[1], stoc:cols[2], link:cols[3], img:cols[4]||"", desc:cols[5]||"" };
-    }).filter(p => p?.name);
-    setCatalog(parsed); setCatalogDate(today);
-    lsSet("eb_catalog", parsed);
-    localStorage.setItem("eb_catalog_date", today);
-  } catch (e) { alert("Eroare sync: " + e.message); }
-  setLoading(false); setLoadMsg("");
-};
-
-// ── Manual CSV upload ────────────────────────────────────────────────
-const handleManualUpload = (event) => {
-  const file = event.target.files[0];
-  if (!file) return;
-  setLoading(true);
-  setLoadMsg("Procesez fișierul CSV încărcat...");
-  const reader = new FileReader();
-  reader.onload = (e) => {
+  // ── Catalog sync ─────────────────────────────────────────────────────
+  const syncCatalog = async (force = false) => {
+    if (!feedUrl) { alert("Adaugă URL-ul CSV în ⚙️ Setări"); return; }
+    const today = new Date().toISOString().slice(0,10);
+    if (!force && catalogDate === today && catalog.length > 0) return;
+    setLoading(true); setLoadMsg("Sincronizez catalogul...");
     try {
-      const text = e.target.result;
+      let finalUrl = feedUrl;
+      const isGoogleDrive = feedUrl.includes('drive.google.com') || feedUrl.includes('googleusercontent.com');
+      if (isGoogleDrive) {
+        finalUrl = `/api/proxy-csv?url=${encodeURIComponent(feedUrl)}`;
+      }
+      const res = await fetch(finalUrl);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const text = await res.text();
       const parsed = text.split("\n").slice(1).map(row => {
-        const cols = row.match(/"([^"]*)"|([^,]+)/g)?.map(c => c.replace(/^"|"$/g, "").trim()) || [];
+        const cols = row.match(/"([^"]*)"|([^,]+)/g)?.map(c => c.replace(/^"|"$/g,"").trim()) || [];
         if (cols.length < 4) return null;
-        return {
-          name: cols[0],
-          price: cols[1],
-          stoc: cols[2],
-          link: cols[3],
-          img: cols[4] || "",
-          desc: cols[5] || ""
-        };
+        return { name:cols[0], price:cols[1], stoc:cols[2], link:cols[3], img:cols[4]||"", desc:cols[5]||"" };
       }).filter(p => p?.name);
-      const today = new Date().toISOString().slice(0, 10);
-      setCatalog(parsed);
-      setCatalogDate(today);
+      setCatalog(parsed); setCatalogDate(today);
       lsSet("eb_catalog", parsed);
       localStorage.setItem("eb_catalog_date", today);
-      alert(`✅ Catalog încărcat cu succes: ${parsed.length} produse`);
-    } catch (err) {
-      alert("Eroare la parsarea fișierului CSV: " + err.message);
-    } finally {
+    } catch (e) { alert("Eroare sync: " + e.message); }
+    setLoading(false); setLoadMsg("");
+  };
+
+  // ── Manual CSV upload ────────────────────────────────────────────────
+  const handleManualUpload = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    setLoading(true);
+    setLoadMsg("Procesez fișierul CSV încărcat...");
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const text = e.target.result;
+        const parsed = text.split("\n").slice(1).map(row => {
+          const cols = row.match(/"([^"]*)"|([^,]+)/g)?.map(c => c.replace(/^"|"$/g, "").trim()) || [];
+          if (cols.length < 4) return null;
+          return {
+            name: cols[0],
+            price: cols[1],
+            stoc: cols[2],
+            link: cols[3],
+            img: cols[4] || "",
+            desc: cols[5] || ""
+          };
+        }).filter(p => p?.name);
+        const today = new Date().toISOString().slice(0, 10);
+        setCatalog(parsed);
+        setCatalogDate(today);
+        lsSet("eb_catalog", parsed);
+        localStorage.setItem("eb_catalog_date", today);
+        alert(`✅ Catalog încărcat cu succes: ${parsed.length} produse`);
+      } catch (err) {
+        alert("Eroare la parsarea fișierului CSV: " + err.message);
+      } finally {
+        setLoading(false);
+        setLoadMsg("");
+      }
+    };
+    reader.onerror = () => {
+      alert("Eroare la citirea fișierului");
       setLoading(false);
       setLoadMsg("");
-    }
+    };
+    reader.readAsText(file, "UTF-8");
   };
-  reader.onerror = () => {
-    alert("Eroare la citirea fișierului");
-    setLoading(false);
-    setLoadMsg("");
-  };
-  reader.readAsText(file, "UTF-8");
-};
 
   // ── Daily trends ─────────────────────────────────────────────────────
-const generateTrends = async (force = false) => {
-  if (!catalog.length) { alert("Sincronizează catalogul mai întâi (tab 📂 Sync)"); return; }
-  const today = new Date().toISOString().slice(0,10);
-  if (!force && trendsDate === today && trends) return;
-  
-  // Pauză de 2 secunde pentru a evita 429 Too Many Requests
-  await new Promise(resolve => setTimeout(resolve, 2000));
-  
-  setLoading(true); setLoadMsg("Analizez catalogul — top 15 produse pentru azi...");
-  try {
-    const month  = new Date().toLocaleString("ro-RO", {month:"long"});
-    // Reducem eșantionul la maxim 30 de produse
-    const sample = catalog.slice(0,30).map(p=>`${p.name} | ${p.price} RON | ${p.desc.substring(0,110)}`).join("\n");
-    const prompt = `Ești expert marketing și SEO pentru produse naturiste în România.
+  const generateTrends = async (force = false) => {
+    if (!catalog.length) { alert("Sincronizează catalogul mai întâi (tab 📂 Sync)"); return; }
+    const today = new Date().toISOString().slice(0,10);
+    if (!force && trendsDate === today && trends) return;
+    
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    setLoading(true); setLoadMsg("Analizez catalogul — top 15 produse pentru azi...");
+    try {
+      const month  = new Date().toLocaleString("ro-RO", {month:"long"});
+      const sample = catalog.slice(0,20).map(p=>`${p.name} | ${p.price} RON | ${p.desc.substring(0,110)}`).join("\n");
+      const prompt = `IMPORTANT: Răspunde EXCLUSIV cu JSON valid, fără text înainte sau după. Începe direct cu { și termină cu }.
+
+Ești expert marketing și SEO pentru produse naturiste în România.
 Luna curentă: ${month}. Analizează catalogul și selectează EXACT 15 produse cu cel mai mare potențial de vânzare acum, bazat pe sezonalitate, beneficii, și cerere tipică pentru ${month} în România.
 
 Pentru fiecare produs oferă:
@@ -286,18 +285,19 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
 
 Catalog (nume | preț | descriere):
 ${sample}`;
-    const result = await callAIJson(prompt);
-    if (result?.recomandari) {
-      setTrends(result.recomandari); setTrendsDate(today);
-      lsSet("eb_trends", result.recomandari);
-      localStorage.setItem("eb_trends_date", today);
+      const result = await callAIJson(prompt);
+      if (result?.recomandari) {
+        setTrends(result.recomandari); setTrendsDate(today);
+        lsSet("eb_trends", result.recomandari);
+        localStorage.setItem("eb_trends_date", today);
+      }
+    } catch (e) { 
+      console.error("Eroare trends detaliată:", e);
+      alert("Eroare trends: " + (e.message || e.toString())); 
     }
-  } catch (e) { 
-    console.error("Eroare trends detaliată:", e);
-    alert("Eroare trends: " + (e.message || e.toString())); 
-  }
-  setLoading(false); setLoadMsg("");
-};
+    setLoading(false); setLoadMsg("");
+  };
+
   // ── Ad copy ──────────────────────────────────────────────────────────
   const generateAdCopy = async () => {
     const p = adProd;
@@ -400,32 +400,32 @@ Răspunde EXCLUSIV în JSON valid, fără nimic altceva:
     setLoading(false); setLoadMsg("");
   };
 
-const adTutorial = () => {
-  const iList = targeting.interests.length ? targeting.interests.slice(0,5).join(", ") : "produse naturale, alimentație bio, sănătate & wellness";
-  const gLabel = {all:"Toate genurile",female:"Femei",male:"Bărbați"}[targeting.gender];
-  return [
-    { title:"Deschide Ads Manager",           instruction:'adsmanager.facebook.com → butonul „+ Creare"' },
-    { title:"Alege obiectivul",                instruction:`Selectează „${selectedObj && selectedObj.metaName}" din cele 6 opțiuni`, detail: (selectedObj && selectedObj.id === "traffic") ? `💡 Poate apărea ca „Link clicks" — același lucru.` : null },
-    { title:"Denumește campania",              instruction:`EcoBites — ${adProd.name} — ${selectedObj && selectedObj.label}`, copy:`EcoBites — ${adProd.name} — ${selectedObj && selectedObj.label}` },
-    { title:"Next → Ad Set",                   instruction:"Apasă Next — ajungi la nivelul de targeting și buget" },
-    { title:"Locație",                         instruction:'La „Locations" → șterge implicit → scrie „Romania" → selectează', detail:'Lasă „People living in or recently in this location".' },
-    { title:"Vârstă & Gen",                    instruction:`${targeting.ageMin}–${targeting.ageMax} ani · ${gLabel}`, detail: `💡 La start lasă „Toate" — Meta optimizează el.` },
-    { title:"Interese (Detailed Targeting)",   instruction:`Caută și adaugă: ${iList}`, detail:"3-5 interese maxim. Prea multe diluează audiența.", copy:iList },
-    { title:"Buget zilnic",                    instruction:`Daily budget → ${daily} EUR (≈ ${dailyRON} RON)`, detail:`Total ${targeting.durationDays} zile: ${targeting.budgetMonthly} EUR. Nu folosi Lifetime budget la start.` },
-    { title:"Programare",                      instruction:`Start: azi · End: peste ${targeting.durationDays} zile`, detail:"Sau fără end date — oprești manual după ce analizezi datele." },
-    { title:"Next → Ad",                       instruction:"Apasă Next — ajungi la nivelul Ad (creația propriu-zisă)" },
-    { title:"Format",                          instruction:"Selectează: Single image or video" },
-    ...(selectedAd ? [
-      { title:"Primary Text",  instruction:selectedAd.primary_text,  detail:"Paste direct, cu tot cu emoji.",       copy:selectedAd.primary_text  },
-      { title:"Headline",      instruction:selectedAd.headline,       detail:"Apare bold sub imagine.",              copy:selectedAd.headline      },
-      { title:"CTA Button",    instruction:`La „Call to action" selectează: „${selectedAd.cta}"` },
-    ] : []),
-    { title:"Website URL",                     instruction:adProd.link, copy:adProd.link },
-    { title:"Upload vizual",                   instruction:"Media → Add media → uploadează imaginea", detail:"1080×1080px ideal. Text < 20% din suprafața imaginii." },
-    { title:"Preview & Publish",               instruction:'Verifică preview Mobile & Desktop → apasă „Publish"', detail:"⚠️ Nu edita ad-ul în primele 48h — resetezi learning phase-ul algoritmului." },
-    { title:"Monitorizare (după 3 zile)",       instruction:"CTR > 1% = bun · CPM < 20 RON = decent pentru România", detail:"CTR < 0.5% după 3 zile → testează alt vizual sau alt text." },
-  ];
-};
+  const adTutorial = () => {
+    const iList = targeting.interests.length ? targeting.interests.slice(0,5).join(", ") : "produse naturale, alimentație bio, sănătate & wellness";
+    const gLabel = {all:"Toate genurile",female:"Femei",male:"Bărbați"}[targeting.gender];
+    return [
+      { title:"Deschide Ads Manager",           instruction:'adsmanager.facebook.com → butonul „+ Creare"' },
+      { title:"Alege obiectivul",                instruction:`Selectează „${selectedObj && selectedObj.metaName}" din cele 6 opțiuni`, detail: (selectedObj && selectedObj.id === "traffic") ? `💡 Poate apărea ca „Link clicks" — același lucru.` : null },
+      { title:"Denumește campania",              instruction:`EcoBites — ${adProd.name} — ${selectedObj && selectedObj.label}`, copy:`EcoBites — ${adProd.name} — ${selectedObj && selectedObj.label}` },
+      { title:"Next → Ad Set",                   instruction:"Apasă Next — ajungi la nivelul de targeting și buget" },
+      { title:"Locație",                         instruction:'La „Locations" → șterge implicit → scrie „Romania" → selectează', detail:'Lasă „People living in or recently in this location".' },
+      { title:"Vârstă & Gen",                    instruction:`${targeting.ageMin}–${targeting.ageMax} ani · ${gLabel}`, detail: `💡 La start lasă „Toate" — Meta optimizează el.` },
+      { title:"Interese (Detailed Targeting)",   instruction:`Caută și adaugă: ${iList}`, detail:"3-5 interese maxim. Prea multe diluează audiența.", copy:iList },
+      { title:"Buget zilnic",                    instruction:`Daily budget → ${daily} EUR (≈ ${dailyRON} RON)`, detail:`Total ${targeting.durationDays} zile: ${targeting.budgetMonthly} EUR. Nu folosi Lifetime budget la start.` },
+      { title:"Programare",                      instruction:`Start: azi · End: peste ${targeting.durationDays} zile`, detail:"Sau fără end date — oprești manual după ce analizezi datele." },
+      { title:"Next → Ad",                       instruction:"Apasă Next — ajungi la nivelul Ad (creația propriu-zisă)" },
+      { title:"Format",                          instruction:"Selectează: Single image or video" },
+      ...(selectedAd ? [
+        { title:"Primary Text",  instruction:selectedAd.primary_text,  detail:"Paste direct, cu tot cu emoji.",       copy:selectedAd.primary_text  },
+        { title:"Headline",      instruction:selectedAd.headline,       detail:"Apare bold sub imagine.",              copy:selectedAd.headline      },
+        { title:"CTA Button",    instruction:`La „Call to action" selectează: „${selectedAd.cta}"` },
+      ] : []),
+      { title:"Website URL",                     instruction:adProd.link, copy:adProd.link },
+      { title:"Upload vizual",                   instruction:"Media → Add media → uploadează imaginea", detail:"1080×1080px ideal. Text < 20% din suprafața imaginii." },
+      { title:"Preview & Publish",               instruction:'Verifică preview Mobile & Desktop → apasă „Publish"', detail:"⚠️ Nu edita ad-ul în primele 48h — resetezi learning phase-ul algoritmului." },
+      { title:"Monitorizare (după 3 zile)",       instruction:"CTR > 1% = bun · CPM < 20 RON = decent pentru România", detail:"CTR < 0.5% după 3 zile → testează alt vizual sau alt text." },
+    ];
+  };
 
   // ── UI helpers ───────────────────────────────────────────────────────
   const copyText = (text, id) => {
@@ -521,15 +521,24 @@ const adTutorial = () => {
 
         {/* Provider-specific fields */}
         <div style={{ display:"flex", flexDirection:"column", gap:14, marginBottom:22 }}>
-          {provider==="gemini" && (
-            <div>
-              <label style={{ fontSize:12, color:C.muted, display:"block", marginBottom:6 }}>Gemini API Key</label>
-              <input className="field" type={keysVisible?"text":"password"} placeholder="AIzaSy..." value={geminiKey} onChange={e=>setGeminiKey(e.target.value)} />
-              <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer" style={{ fontSize:11, color:C.accent, display:"block", marginTop:5 }}>→ Obții gratuit de la Google AI Studio</a>
-            </div>
+          {provider === "gemini" && (
+            <>
+              <div>
+                <label style={{ fontSize:12, color:C.muted, display:"block", marginBottom:6 }}>Gemini API Key</label>
+                <input className="field" type={keysVisible?"text":"password"} placeholder="AIzaSy..." value={geminiKey} onChange={e=>setGeminiKey(e.target.value)} />
+                <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer" style={{ fontSize:11, color:C.accent, display:"block", marginTop:5 }}>→ Obții gratuit de la Google AI Studio</a>
+              </div>
+              <div>
+                <label style={{ fontSize:12, color:C.muted, display:"block", marginBottom:6 }}>Model Gemini</label>
+                <select className="field" value={geminiModel} onChange={e=>setGeminiModel(e.target.value)}>
+                  <option value="gemini-2.0-flash">Gemini 2.0 Flash (gratuit, 1500 req/zi)</option>
+                  <option value="gemini-2.5-flash">Gemini 2.5 Flash (previzualizare)</option>
+                </select>
+              </div>
+            </>
           )}
 
-          {provider==="openrouter" && (
+          {provider === "openrouter" && (
             <>
               <div>
                 <label style={{ fontSize:12, color:C.muted, display:"block", marginBottom:6 }}>OpenRouter API Key</label>
@@ -557,7 +566,7 @@ const adTutorial = () => {
             </>
           )}
 
-          {provider==="huggingface" && (
+          {provider === "huggingface" && (
             <>
               <div>
                 <label style={{ fontSize:12, color:C.muted, display:"block", marginBottom:6 }}>HuggingFace API Key</label>
@@ -637,89 +646,85 @@ const adTutorial = () => {
         {/* ══════════════════════════════════════════════════
             TAB: SYNC
         ══════════════════════════════════════════════════ */}
-{tab === "sync" && (
-  <div className="card" style={{ textAlign: "center", padding: "44px 24px" }}>
-    <div style={{ fontSize: 44, marginBottom: 16 }}>📂</div>
-    <h2 style={{ fontFamily: "'Bricolage Grotesque'", marginBottom: 10 }}>Sincronizare Catalog</h2>
-    <p style={{ color: C.muted, fontSize: 14, marginBottom: 8, lineHeight: 1.7, maxWidth: 480, margin: "0 auto 24px" }}>
-      Importă produsele din CSV-ul generat de scriptul tău Google Sheets.<br/>
-      Poți folosi fie link-ul public de pe Drive, fie încărca fișierul direct.
-    </p>
+        {tab === "sync" && (
+          <div className="card" style={{ textAlign: "center", padding: "44px 24px" }}>
+            <div style={{ fontSize: 44, marginBottom: 16 }}>📂</div>
+            <h2 style={{ fontFamily: "'Bricolage Grotesque'", marginBottom: 10 }}>Sincronizare Catalog</h2>
+            <p style={{ color: C.muted, fontSize: 14, marginBottom: 8, lineHeight: 1.7, maxWidth: 480, margin: "0 auto 24px" }}>
+              Importă produsele din CSV-ul generat de scriptul tău Google Sheets.<br/>
+              Poți folosi fie link-ul public de pe Drive, fie încărca fișierul direct.
+            </p>
 
-    {/* Afișează data ultimei sincronizări */}
-    {catalogDate && (
-      <div style={{ color: C.muted, fontSize: 12, marginBottom: 20 }}>
-        Ultima sincronizare: <strong style={{ color: C.accent }}>{catalogDate}</strong>
-      </div>
-    )}
+            {catalogDate && (
+              <div style={{ color: C.muted, fontSize: 12, marginBottom: 20 }}>
+                Ultima sincronizare: <strong style={{ color: C.accent }}>{catalogDate}</strong>
+              </div>
+            )}
 
-    {/* Secțiunea URL */}
-    <div style={{ marginBottom: 32 }}>
-      <div style={{ fontWeight: 600, marginBottom: 8, color: C.sub }}>🔗 Sincronizare automată (URL)</div>
-      <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
-        <button className="btn-p" onClick={() => syncCatalog(true)}>🔄 Sincronizează din URL</button>
-        {catalog.length > 0 && (
-          <button className="btn-s" onClick={() => setTab("trends")}>Mergi la Trends →</button>
+            <div style={{ marginBottom: 32 }}>
+              <div style={{ fontWeight: 600, marginBottom: 8, color: C.sub }}>🔗 Sincronizare automată (URL)</div>
+              <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+                <button className="btn-p" onClick={() => syncCatalog(true)}>🔄 Sincronizează din URL</button>
+                {catalog.length > 0 && (
+                  <button className="btn-s" onClick={() => setTab("trends")}>Mergi la Trends →</button>
+                )}
+              </div>
+              <div style={{ fontSize: 12, color: C.muted, marginTop: 8 }}>
+                URL-ul se configurează în <strong>⚙️ Setări</strong> – folosește link-ul direct de descărcare:<br/>
+                <code style={{ background: "#0a0a1a", padding: "2px 6px", borderRadius: 6 }}>https://drive.google.com/uc?export=download&id=ID_FISIER</code>
+              </div>
+            </div>
+
+            <div style={{ borderTop: `1px solid ${C.border}`, margin: "16px auto", width: "80%" }} />
+
+            <div>
+              <div style={{ fontWeight: 600, marginBottom: 8, color: C.sub }}>📁 Încărcare manuală (CSV)</div>
+              <input
+                type="file"
+                accept=".csv"
+                onChange={handleManualUpload}
+                style={{ display: "none" }}
+                id="csv-upload-input"
+              />
+              <label
+                htmlFor="csv-upload-input"
+                style={{
+                  display: "inline-block",
+                  background: C.accentDim,
+                  border: `1px solid ${C.accentBorder}`,
+                  padding: "10px 22px",
+                  borderRadius: 9,
+                  cursor: "pointer",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: C.accent,
+                  transition: "all 0.2s"
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = "rgba(110,231,183,0.2)"}
+                onMouseLeave={e => e.currentTarget.style.background = C.accentDim}
+              >
+                📂 Alege fișier CSV
+              </label>
+              <div style={{ fontSize: 12, color: C.muted, marginTop: 10 }}>
+                Fișierul trebuie să aibă coloanele: <strong>nume, preț, stoc, link, imagine, descriere</strong><br/>
+                (separator virgulă, suportă ghilimele duble)
+              </div>
+            </div>
+
+            {catalog.length > 0 && (
+              <div style={{ marginTop: 32, display: "inline-flex", gap: 20, padding: "14px 24px", background: C.accentDim, border: `1px solid ${C.accentBorder}`, borderRadius: 12 }}>
+                <span><strong style={{ color: C.accent }}>{catalog.length}</strong> <span style={{ color: C.muted, fontSize: 13 }}>produse totale</span></span>
+                <span><strong style={{ color: "#4ade80" }}>{catalog.filter(p => p.stoc === "instock").length}</strong> <span style={{ color: C.muted, fontSize: 13 }}>în stoc</span></span>
+                <span><strong style={{ color: C.warn }}>{catalog.filter(p => p.stoc !== "instock").length}</strong> <span style={{ color: C.muted, fontSize: 13 }}>fără stoc</span></span>
+              </div>
+            )}
+          </div>
         )}
-      </div>
-      <div style={{ fontSize: 12, color: C.muted, marginTop: 8 }}>
-        URL-ul se configurează în <strong>⚙️ Setări</strong> – folosește link-ul direct de descărcare:<br/>
-        <code style={{ background: "#0a0a1a", padding: "2px 6px", borderRadius: 6 }}>https://drive.google.com/uc?export=download&id=ID_FISIER</code>
-      </div>
-    </div>
-
-    <div style={{ borderTop: `1px solid ${C.border}`, margin: "16px auto", width: "80%" }} />
-
-    {/* Secțiunea upload manual */}
-    <div>
-      <div style={{ fontWeight: 600, marginBottom: 8, color: C.sub }}>📁 Încărcare manuală (CSV)</div>
-      <input
-        type="file"
-        accept=".csv"
-        onChange={handleManualUpload}
-        style={{ display: "none" }}
-        id="csv-upload-input"
-      />
-      <label
-        htmlFor="csv-upload-input"
-        style={{
-          display: "inline-block",
-          background: C.accentDim,
-          border: `1px solid ${C.accentBorder}`,
-          padding: "10px 22px",
-          borderRadius: 9,
-          cursor: "pointer",
-          fontSize: 14,
-          fontWeight: 600,
-          color: C.accent,
-          transition: "all 0.2s"
-        }}
-        onMouseEnter={e => e.currentTarget.style.background = "rgba(110,231,183,0.2)"}
-        onMouseLeave={e => e.currentTarget.style.background = C.accentDim}
-      >
-        📂 Alege fișier CSV
-      </label>
-      <div style={{ fontSize: 12, color: C.muted, marginTop: 10 }}>
-        Fișierul trebuie să aibă coloanele: <strong>nume, preț, stoc, link, imagine, descriere</strong><br/>
-        (separator virgulă, suportă ghilimele duble)
-      </div>
-    </div>
-
-    {/* Statistici rapide dacă există catalog */}
-    {catalog.length > 0 && (
-      <div style={{ marginTop: 32, display: "inline-flex", gap: 20, padding: "14px 24px", background: C.accentDim, border: `1px solid ${C.accentBorder}`, borderRadius: 12 }}>
-        <span><strong style={{ color: C.accent }}>{catalog.length}</strong> <span style={{ color: C.muted, fontSize: 13 }}>produse totale</span></span>
-        <span><strong style={{ color: "#4ade80" }}>{catalog.filter(p => p.stoc === "instock").length}</strong> <span style={{ color: C.muted, fontSize: 13 }}>în stoc</span></span>
-        <span><strong style={{ color: C.warn }}>{catalog.filter(p => p.stoc !== "instock").length}</strong> <span style={{ color: C.muted, fontSize: 13 }}>fără stoc</span></span>
-      </div>
-    )}
-  </div>
-)}
 
         {/* ══════════════════════════════════════════════════
             TAB: TRENDS
         ══════════════════════════════════════════════════ */}
-        {tab==="trends" && (
+        {tab === "trends" && (
           <div>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20, flexWrap:"wrap", gap:12 }}>
               <div>
@@ -736,12 +741,12 @@ const adTutorial = () => {
             </div>
 
             {!trends ? (
-  <div className="card" style={{ textAlign:"center", color:C.muted, padding:"48px 24px", fontSize:14 }}>
-    {!catalog.length
-      ? <>Sincronizează mai întâi catalogul →{" "}<button className="btn-s btn-sm" onClick={() => setTab("sync")}>tab Sync</button></>
-      : `Apasă „Generează recomandări" pentru analiza zilei de azi`}
-  </div>
-) : (
+              <div className="card" style={{ textAlign:"center", color:C.muted, padding:"48px 24px", fontSize:14 }}>
+                {!catalog.length
+                  ? <>Sincronizează mai întâi catalogul →{" "}<button className="btn-s btn-sm" onClick={() => setTab("sync")}>tab Sync</button></>
+                  : `Apasă „Generează recomandări" pentru analiza zilei de azi`}
+              </div>
+            ) : (
               <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
                 {trends.map((item, i) => {
                   const prod = catalog.find(p=>p.name===item.nume || p.name.includes(item.nume.substring(0,18))) || { name:item.nume, price:"?", img:"", link:"", desc:"", stoc:"" };
@@ -785,7 +790,7 @@ const adTutorial = () => {
         {/* ══════════════════════════════════════════════════
             TAB: META ADS WIZARD
         ══════════════════════════════════════════════════ */}
-        {tab==="ads" && (
+        {tab === "ads" && (
           <div>
             {/* Step bar */}
             <div style={{ display:"flex", gap:6, marginBottom:26 }}>
@@ -800,7 +805,7 @@ const adTutorial = () => {
             </div>
 
             {/* Step 1 — Obiectiv */}
-            {adsStep===1 && (
+            {adsStep === 1 && (
               <div>
                 <h2 style={{ fontFamily:"'Bricolage Grotesque'", fontSize:18, marginBottom:6 }}>Ce vrei să obții cu campania?</h2>
                 <p style={{ color:C.muted, fontSize:13, marginBottom:20, lineHeight:1.6 }}>Obiectivul determină cum optimizează Meta algoritmul. Greșit setat = bani pierduți.</p>
@@ -837,7 +842,7 @@ const adTutorial = () => {
             )}
 
             {/* Step 2 — Produs */}
-            {adsStep===2 && (
+            {adsStep === 2 && (
               <div>
                 <h2 style={{ fontFamily:"'Bricolage Grotesque'", fontSize:18, marginBottom:6 }}>Detalii produs</h2>
                 <p style={{ color:C.muted, fontSize:13, marginBottom:20 }}>Aceste informații alimentează AI-ul. Cu cât mai detaliate, cu atât mai bune textele.</p>
@@ -872,7 +877,7 @@ const adTutorial = () => {
             )}
 
             {/* Step 3 — Text AI + Preview */}
-            {adsStep===3 && (
+            {adsStep === 3 && (
               <div>
                 <h2 style={{ fontFamily:"'Bricolage Grotesque'", fontSize:18, marginBottom:20 }}>Texte generate + Preview reclamă</h2>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 290px", gap:20, alignItems:"start" }}>
@@ -958,7 +963,7 @@ const adTutorial = () => {
             )}
 
             {/* Step 4 — Targeting */}
-            {adsStep===4 && (
+            {adsStep === 4 && (
               <div>
                 <h2 style={{ fontFamily:"'Bricolage Grotesque'", fontSize:18, marginBottom:6 }}>Cine să vadă reclama?</h2>
                 <p style={{ color:C.muted, fontSize:13, marginBottom:16 }}>Simplu la start. Rafinezi după primele date reale de la Meta.</p>
@@ -1032,7 +1037,7 @@ const adTutorial = () => {
             )}
 
             {/* Step 5 — Tutorial */}
-            {adsStep===5 && (
+            {adsStep === 5 && (
               <div>
                 <h2 style={{ fontFamily:"'Bricolage Grotesque'", fontSize:18, marginBottom:14 }}>Tutorial Meta — deschide Ads Manager în paralel</h2>
                 <a href="https://adsmanager.facebook.com" target="_blank" rel="noreferrer"
@@ -1080,7 +1085,7 @@ const adTutorial = () => {
         {/* ══════════════════════════════════════════════════
             TAB: NEWSLETTER
         ══════════════════════════════════════════════════ */}
-        {tab==="newsletter" && (
+        {tab === "newsletter" && (
           <div>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20, flexWrap:"wrap", gap:12 }}>
               <div>
@@ -1126,7 +1131,7 @@ const adTutorial = () => {
         {/* ══════════════════════════════════════════════════
             TAB: CARUSEL / VIDEO
         ══════════════════════════════════════════════════ */}
-        {tab==="carousel" && (
+        {tab === "carousel" && (
           <div>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20, flexWrap:"wrap", gap:12 }}>
               <div>
@@ -1159,7 +1164,7 @@ const adTutorial = () => {
         {/* ══════════════════════════════════════════════════
             TAB: BLOG GOMAG
         ══════════════════════════════════════════════════ */}
-        {tab==="blog" && (
+        {tab === "blog" && (
           <div>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20, flexWrap:"wrap", gap:12 }}>
               <div>
@@ -1221,7 +1226,7 @@ const adTutorial = () => {
         {/* ══════════════════════════════════════════════════
             TAB: BUFFER
         ══════════════════════════════════════════════════ */}
-        {tab==="buffer" && (
+        {tab === "buffer" && (
           <div>
             <h2 style={{ fontFamily:"'Bricolage Grotesque'", fontSize:19, marginBottom:6 }}>📤 Buffer — Postări Organice</h2>
             <p style={{ color:C.muted, fontSize:13, marginBottom:20 }}>Programează postări pe Facebook, Instagram, TikTok, Threads, și X.</p>
