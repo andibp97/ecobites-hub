@@ -81,6 +81,9 @@ export default function EcoBitesHub() {
   const [priceMin,     setPriceMin]     = useState(saved.priceMin || 0);
   const [priceMax,     setPriceMax]     = useState(saved.priceMax || 9999);
   const [sheetWebAppUrl, setSheetWebAppUrl] = useState(saved.sheetWebAppUrl || "");
+  const [newsletterSearch, setNewsletterSearch] = useState("");
+  const [carouselSearch, setCarouselSearch] = useState("");
+  const [blogSearch, setBlogSearch] = useState("");
 
   // Brand & ton
   const [brandDescription, setBrandDescription] = useState(saved.brandDescription || "EcoBites – produse naturale pentru un stil de viață sănătos.");
@@ -1018,100 +1021,134 @@ Răspunde în limba română, cu text clar, fără markdown inutil.`;
 
         {/* NEWSLETTER TAB */}
         {tab === "newsletter" && (
-          <div>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20, flexWrap:"wrap", gap:12 }}>
-              <div><h2 style={{ fontFamily:"'Bricolage Grotesque'", fontSize:19, marginBottom:4 }}>✉️ Generator Newsletter</h2><p style={{ color:C.muted, fontSize:13 }}>Selectează până la 15 produse – AI-ul va scrie un newsletter care le include pe toate (3 variante).</p></div>
-              <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
-                <select multiple size={3} className="field" style={{ minWidth:220, maxHeight:100 }} value={newsletterProducts.map(p => p.name)} onChange={e => {
-                  const selectedNames = Array.from(e.target.selectedOptions, opt => opt.value);
-                  const selected = catalog.filter(p => selectedNames.includes(p.name)).slice(0,15);
-                  setNewsletterProducts(selected);
-                }}>
-                  {catalog.slice(0,50).map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
-                </select>
-                <button className="btn-p" onClick={() => generateNewsletterMulti(newsletterProducts)}>✉️ Generează 3 variante</button>
-              </div>
+  <div>
+    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20, flexWrap:"wrap", gap:12 }}>
+      <div>
+        <h2 style={{ fontFamily:"'Bricolage Grotesque'", fontSize:19, marginBottom:4 }}>✉️ Generator Newsletter</h2>
+        <p style={{ color:C.muted, fontSize:13 }}>Selectează până la 15 produse – AI-ul va scrie un newsletter care le include pe toate (3 variante).</p>
+      </div>
+      <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+        <div style={{ width: 300 }}>
+          <input className="field" placeholder="Caută produs..." value={newsletterSearch} onChange={e => setNewsletterSearch(e.target.value)} style={{ marginBottom: 8 }} />
+          <select multiple size={5} className="field" style={{ minWidth:220, maxHeight:150 }} value={newsletterProducts.map(p => p.name)} onChange={e => {
+            const selectedNames = Array.from(e.target.selectedOptions, opt => opt.value);
+            const selected = catalog.filter(p => selectedNames.includes(p.name)).slice(0,15);
+            setNewsletterProducts(selected);
+          }}>
+            {catalog.filter(p => p.name.toLowerCase().includes(newsletterSearch.toLowerCase())).map(p => (
+              <option key={p.name} value={p.name}>{p.name}</option>
+            ))}
+          </select>
+        </div>
+        <button className="btn-p" onClick={() => generateNewsletterMulti(newsletterProducts)}>✉️ Generează 3 variante</button>
+      </div>
+    </div>
+    {newsletterProducts.length > 0 && (
+      <div style={{ marginBottom:12, padding:"8px 12px", background:C.accentDim, borderRadius:8, fontSize:13 }}>
+        ✅ {newsletterProducts.length} produse selectate: {newsletterProducts.map(p => p.name).join(", ")}
+      </div>
+    )}
+    {!newsletterOut.length && newsletterProducts.length === 0 && <div className="card" style={{ textAlign:"center", color:C.muted, padding:44 }}>Selectează produse și apasă Generează</div>}
+    {newsletterOut.map((item, i) => {
+      const full = `📧 Subiect: ${item.subiect}\n📌 Pre-header: ${item.pre_header}\n\n${item.corp}\n\n→ ${item.cta}\n🔗 Link-uri: ${newsletterProducts.map(p => p.link).join(", ")}`;
+      return (
+        <div key={i} className="card" style={{ marginBottom:12 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}><span style={{ fontWeight:600, fontSize:14 }}>Varianta {i+1}</span><CopyBtn text={full} id={`nl-all-${i}`} /></div>
+          {[["📧 Subiect",item.subiect],["📌 Pre-header",item.pre_header],["Corp email",item.corp],["CTA",item.cta]].map(([lbl,val]) => (
+            <div key={lbl} style={{ marginBottom:12 }}>
+              <div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:.5, marginBottom:4 }}>{lbl}</div>
+              <div style={{ display:"flex", justifyContent:"space-between", gap:10 }}><div style={{ fontSize:14, color:C.sub, lineHeight:1.6 }}>{val}</div><CopyBtn text={val} id={`nl-${i}-${lbl}`} /></div>
             </div>
-            {newsletterProducts.length > 0 && <div style={{ marginBottom:12, padding:"8px 12px", background:C.accentDim, borderRadius:8, fontSize:13 }}>Produse selectate: {newsletterProducts.map(p => p.name).join(", ")}</div>}
-            {newsletterOut.map((item, i) => {
-              const full = `📧 Subiect: ${item.subiect}\n📌 Pre-header: ${item.pre_header}\n\n${item.corp}\n\n→ ${item.cta}\n🔗 Link-uri: ${newsletterProducts.map(p => p.link).join(", ")}`;
-              return (
-                <div key={i} className="card" style={{ marginBottom:12 }}>
-                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}><span style={{ fontWeight:600, fontSize:14 }}>Varianta {i+1}</span><CopyBtn text={full} id={`nl-all-${i}`} /></div>
-                  {[["📧 Subiect",item.subiect],["📌 Pre-header",item.pre_header],["Corp email",item.corp],["CTA",item.cta]].map(([lbl,val]) => (
-                    <div key={lbl} style={{ marginBottom:12 }}>
-                      <div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:.5, marginBottom:4 }}>{lbl}</div>
-                      <div style={{ display:"flex", justifyContent:"space-between", gap:10 }}><div style={{ fontSize:14, color:C.sub, lineHeight:1.6 }}>{val}</div><CopyBtn text={val} id={`nl-${i}-${lbl}`} /></div>
-                    </div>
-                  ))}
-                </div>
-              );
-            })}
-          </div>
-        )}
-
+          ))}
+        </div>
+      );
+    })}
+  </div>
+)}
         {/* CAROUSEL TAB */}
         {tab === "carousel" && (
-          <div>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20, flexWrap:"wrap", gap:12 }}>
-              <div><h2 style={{ fontFamily:"'Bricolage Grotesque'", fontSize:19, marginBottom:4 }}>🎬 Carusel & Video Script</h2><p style={{ color:C.muted, fontSize:13 }}>Selectează până la 15 produse – AI-ul va genera script pentru carusel Instagram și Reels.</p></div>
-              <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
-                <select multiple size={3} className="field" style={{ minWidth:220, maxHeight:100 }} value={carouselProducts.map(p => p.name)} onChange={e => {
-                  const selectedNames = Array.from(e.target.selectedOptions, opt => opt.value);
-                  const selected = catalog.filter(p => selectedNames.includes(p.name)).slice(0,15);
-                  setCarouselProducts(selected);
-                }}>
-                  {catalog.slice(0,50).map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
-                </select>
-                <button className="btn-p" onClick={() => generateCarouselMulti(carouselProducts)}>🎬 Generează</button>
-              </div>
-            </div>
-            {carouselProducts.length > 0 && <div style={{ marginBottom:12, padding:"8px 12px", background:C.accentDim, borderRadius:8, fontSize:13 }}>Produse selectate: {carouselProducts.map(p => p.name).join(", ")}</div>}
-            {carouselOut && (
-              <div className="card">
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}><span style={{ fontWeight:600 }}>Script generat</span><CopyBtn text={carouselOut} id="carousel-all" /></div>
-                <pre style={{ whiteSpace:"pre-wrap", fontSize:14, lineHeight:1.75, color:C.sub, fontFamily:"inherit" }}>{carouselOut}</pre>
-                <button className="btn-s btn-sm" style={{ marginTop:16 }} onClick={() => generateCarouselMulti(carouselProducts)}>🔄 Regenerează</button>
-              </div>
-            )}
-          </div>
-        )}
-
+  <div>
+    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20, flexWrap:"wrap", gap:12 }}>
+      <div>
+        <h2 style={{ fontFamily:"'Bricolage Grotesque'", fontSize:19, marginBottom:4 }}>🎬 Carusel & Video Script</h2>
+        <p style={{ color:C.muted, fontSize:13 }}>Selectează până la 15 produse – AI-ul va genera script pentru carusel Instagram și Reels.</p>
+      </div>
+      <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+        <div style={{ width: 300 }}>
+          <input className="field" placeholder="Caută produs..." value={carouselSearch} onChange={e => setCarouselSearch(e.target.value)} style={{ marginBottom: 8 }} />
+          <select multiple size={5} className="field" style={{ minWidth:220, maxHeight:150 }} value={carouselProducts.map(p => p.name)} onChange={e => {
+            const selectedNames = Array.from(e.target.selectedOptions, opt => opt.value);
+            const selected = catalog.filter(p => selectedNames.includes(p.name)).slice(0,15);
+            setCarouselProducts(selected);
+          }}>
+            {catalog.filter(p => p.name.toLowerCase().includes(carouselSearch.toLowerCase())).map(p => (
+              <option key={p.name} value={p.name}>{p.name}</option>
+            ))}
+          </select>
+        </div>
+        <button className="btn-p" onClick={() => generateCarouselMulti(carouselProducts)}>🎬 Generează</button>
+      </div>
+    </div>
+    {carouselProducts.length > 0 && (
+      <div style={{ marginBottom:12, padding:"8px 12px", background:C.accentDim, borderRadius:8, fontSize:13 }}>
+        ✅ {carouselProducts.length} produse selectate: {carouselProducts.map(p => p.name).join(", ")}
+      </div>
+    )}
+    {carouselOut && (
+      <div className="card">
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}><span style={{ fontWeight:600 }}>Script generat</span><CopyBtn text={carouselOut} id="carousel-all" /></div>
+        <pre style={{ whiteSpace:"pre-wrap", fontSize:14, lineHeight:1.75, color:C.sub, fontFamily:"inherit" }}>{carouselOut}</pre>
+        <button className="btn-s btn-sm" style={{ marginTop:16 }} onClick={() => generateCarouselMulti(carouselProducts)}>🔄 Regenerează</button>
+      </div>
+    )}
+  </div>
+)}
         {/* BLOG TAB */}
         {tab === "blog" && (
-          <div>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20, flexWrap:"wrap", gap:12 }}>
-              <div><h2 style={{ fontFamily:"'Bricolage Grotesque'", fontSize:19, marginBottom:4 }}>✍️ Generator Blog — Gomag</h2><p style={{ color:C.muted, fontSize:13 }}>Selectează până la 15 produse – AI-ul va scrie un articol SEO complet.</p></div>
-              <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
-                <select multiple size={3} className="field" style={{ minWidth:220, maxHeight:100 }} value={blogProducts.map(p => p.name)} onChange={e => {
-                  const selectedNames = Array.from(e.target.selectedOptions, opt => opt.value);
-                  const selected = catalog.filter(p => selectedNames.includes(p.name)).slice(0,15);
-                  setBlogProducts(selected);
-                }}>
-                  {catalog.slice(0,50).map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
-                </select>
-                <button className="btn-p" onClick={() => generateBlogMulti(blogProducts)}>✍️ Generează articol</button>
-              </div>
-            </div>
-            {blogProducts.length > 0 && <div style={{ marginBottom:12, padding:"8px 12px", background:C.accentDim, borderRadius:8, fontSize:13 }}>Produse selectate: {blogProducts.map(p => p.name).join(", ")}</div>}
-            {blogOut && (
-              <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-                {["titlu","seo_url","seo_titlu","meta_desc","tags","link_produs"].map(f => (
-                  <div key={f} className="card" style={{ padding:"14px 18px" }}>
-                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}><div><div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:.5 }}>{f}</div></div><CopyBtn text={String(blogOut[f]||"")} id={`blog-${f}`} /></div>
-                    <div style={{ fontSize:14, color:C.sub, lineHeight:1.6, background:"#0a0a1a", padding:"9px 12px", borderRadius:8 }}>{String(blogOut[f]||"")}</div>
-                  </div>
-                ))}
-                <div className="card" style={{ padding:"14px 18px" }}>
-                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}><div><div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:.5 }}>Conținut HTML</div></div><CopyBtn text={String(blogOut.continut_html||"")} id="blog-html" /></div>
-                  <div style={{ fontSize:13, color:C.sub, lineHeight:1.7, background:"#0a0a1a", padding:"12px 14px", borderRadius:8, maxHeight:280, overflowY:"auto", fontFamily:"monospace", wordBreak:"break-word" }}>{blogOut.continut_html}</div>
-                </div>
-                <button className="btn-s btn-sm" onClick={() => generateBlogMulti(blogProducts)}>🔄 Regenerează articol</button>
-              </div>
-            )}
+  <div>
+    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20, flexWrap:"wrap", gap:12 }}>
+      <div>
+        <h2 style={{ fontFamily:"'Bricolage Grotesque'", fontSize:19, marginBottom:4 }}>✍️ Generator Blog — Gomag</h2>
+        <p style={{ color:C.muted, fontSize:13 }}>Selectează până la 15 produse – AI-ul va scrie un articol SEO complet.</p>
+      </div>
+      <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+        <div style={{ width: 300 }}>
+          <input className="field" placeholder="Caută produs..." value={blogSearch} onChange={e => setBlogSearch(e.target.value)} style={{ marginBottom: 8 }} />
+          <select multiple size={5} className="field" style={{ minWidth:220, maxHeight:150 }} value={blogProducts.map(p => p.name)} onChange={e => {
+            const selectedNames = Array.from(e.target.selectedOptions, opt => opt.value);
+            const selected = catalog.filter(p => selectedNames.includes(p.name)).slice(0,15);
+            setBlogProducts(selected);
+          }}>
+            {catalog.filter(p => p.name.toLowerCase().includes(blogSearch.toLowerCase())).map(p => (
+              <option key={p.name} value={p.name}>{p.name}</option>
+            ))}
+          </select>
+        </div>
+        <button className="btn-p" onClick={() => generateBlogMulti(blogProducts)}>✍️ Generează articol</button>
+      </div>
+    </div>
+    {blogProducts.length > 0 && (
+      <div style={{ marginBottom:12, padding:"8px 12px", background:C.accentDim, borderRadius:8, fontSize:13 }}>
+        ✅ {blogProducts.length} produse selectate: {blogProducts.map(p => p.name).join(", ")}
+      </div>
+    )}
+    {blogOut && (
+      <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+        {["titlu","seo_url","seo_titlu","meta_desc","tags","link_produs"].map(f => (
+          <div key={f} className="card" style={{ padding:"14px 18px" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}><div><div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:.5 }}>{f}</div></div><CopyBtn text={String(blogOut[f]||"")} id={`blog-${f}`} /></div>
+            <div style={{ fontSize:14, color:C.sub, lineHeight:1.6, background:"#0a0a1a", padding:"9px 12px", borderRadius:8 }}>{String(blogOut[f]||"")}</div>
           </div>
-        )}
-
+        ))}
+        <div className="card" style={{ padding:"14px 18px" }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}><div><div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:.5 }}>Conținut HTML</div></div><CopyBtn text={String(blogOut.continut_html||"")} id="blog-html" /></div>
+          <div style={{ fontSize:13, color:C.sub, lineHeight:1.7, background:"#0a0a1a", padding:"12px 14px", borderRadius:8, maxHeight:280, overflowY:"auto", fontFamily:"monospace", wordBreak:"break-word" }}>{blogOut.continut_html}</div>
+        </div>
+        <button className="btn-s btn-sm" onClick={() => generateBlogMulti(blogProducts)}>🔄 Regenerează articol</button>
+      </div>
+    )}
+  </div>
+)}
         {/* BUFFER TAB */}
         {tab === "buffer" && (
           <div>
