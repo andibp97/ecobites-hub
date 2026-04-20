@@ -772,7 +772,7 @@ Format JSON: {"recomandari":[{"nume":"...","motiv":"...","idei":["..."],"faceboo
           </div>
         )}
 
-        {/* TAB 2: TRENDS */}
+  {/* TAB 2: TRENDS */}
         {tab === "trends" && (
           <div>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20, flexWrap:"wrap", gap:12 }}>
@@ -780,8 +780,19 @@ Format JSON: {"recomandari":[{"nume":"...","motiv":"...","idei":["..."],"faceboo
                 <h2 style={{ fontFamily:"'Bricolage Grotesque'", fontSize:19, marginBottom:4 }}>🔥 Top 10 Produse</h2>
                 <p style={{ color:C.muted, fontSize:13 }}>Analiză bazată pe sezonalitate și Google Trends · {catalog.length} produse</p>
               </div>
-              <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+              <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems: "center" }}>
                 <button className="btn-s btn-sm" onClick={fetchGoogleTrends} disabled={loading}>📈 Tendințe RO</button>
+                
+                {/* Butoanele de refresh și ștergere cache */}
+                {trends && <button className="btn-s btn-sm" onClick={() => generateTrends(true)}>🔄 Regenerează</button>}
+                <button className="btn-s btn-sm" onClick={() => { 
+                  localStorage.removeItem("eb_trends"); 
+                  localStorage.removeItem("eb_trends_date"); 
+                  setTrends(null); 
+                  setTrendsDate(""); 
+                  showToast("Cache-ul a fost șters. Poți genera din nou."); 
+                }}>🗑️ Șterge cache</button>
+                
                 <button className="btn-p btn-sm" onClick={() => generateTrends()} disabled={!catalog.length}>🪄 Generează recomandări</button>
               </div>
             </div>
