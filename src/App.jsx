@@ -137,6 +137,7 @@ export default function EcoBitesHub() {
   // Trends & Manual Selection
   const [trends, setTrends] = useState(() => lsGet("eb_trends") || null);
   const [trendsDate, setTrendsDate] = useState(() => localStorage.getItem("eb_trends_date") || "");
+const [trendSource, setTrendSource] = useState(() => localStorage.getItem("eb_trend_source") || "");
   const [googleTrends, setGoogleTrends] = useState(null);
   const [useGoogleTrends, setUseGoogleTrends] = useState(true);
   const [trendHistory, setTrendHistory] = useState(() => lsGet("eb_trends_history") || []);
@@ -448,28 +449,52 @@ export default function EcoBitesHub() {
     if (!catalog.length) { showToast("Sincronizează catalogul mai întâi", "err"); return; }
     const today = new Date().toISOString().slice(0,10);
     if (!force && trendsDate === today && trends) return;
+    
     setLoading(true); setLoadMsg("Pas 1/3 — Extrag keywords...");
     const inStock = catalog.filter(p => p.stoc === "instock" || !p.stoc);
     let trendScores = null;
     try { trendScores = await fetchKeywordTrends(inStock); } catch {}
+    
     setLoadMsg("Pas 2/3 — Scorez produsele...");
     let scored = scoreCatalogByTrends(inStock, trendScores);
     const sample = [...scored.slice(0, 30), ...scored.slice(30).sort(() => Math.random() - 0.5).slice(0, 20)].slice(0, 50);
     const trendMatched = trendScores ? sample.filter(p => (p._trendScore || 0) > 0).map(p => p.name) : [];
+    
     setLoadMsg("Pas 3/3 — Generez recomandări AI...");
     try {
+      // Calculăm dacă Google ne-a dat date utile
+      const isTrendsActive = trendScores && trendScores.some(t => t.score > 0);
+      const sourceStr = isTrendsActive ? "google" : "seasonality";
+
       let trendsContext = trendScores && trendScores.length ? `\n\nDate Google Trends: ${trendScores.filter(t=>t.score>0).slice(0,8).map(t=>t.keyword).join(", ")}` : "";
       const basePrompt = `Răspunde DOAR cu JSON. Analizează catalogul și alege EXACT 10 produse (potențial de vânzare). Prioritizează [TREND].
 Pentru fiecare: nume, motiv, idei (4 hooks scurte), facebook_post (300-500 caractere, beneficii, preț, link, cta), instagram_caption.
 Catalog:\n${sample.map(p => `${p.name}${trendMatched.includes(p.name) ? " [TREND]" : ""} | ${p.price} RON | ${p.desc.substring(0, 60)}`).join("\n")}
 Format JSON: {"recomandari":[{"nume":"...","motiv":"...","idei":["..."],"facebook_post":"...","instagram_caption":"..."}]}`;
+      
       const result = await callAIJson(buildPromptWithBrand(basePrompt));
+      
       if (result?.recomandari) {
         const enriched = result.recomandari.map(item => ({ ...item, _isTrend: trendMatched.some(n => n.toLowerCase().includes(item.nume.toLowerCase().slice(0,12))) }));
-        setTrends(enriched); setTrendsDate(today); lsSet("eb_trends", enriched); localStorage.setItem("eb_trends_date", today);
+        
+        // Salvăm datele și sursa
+        setTrends(enriched); 
+        setTrendsDate(today); 
+        setTrendSource(sourceStr);
+        
+        lsSet("eb_trends", enriched); 
+        localStorage.setItem("eb_trends_date", today);
+        localStorage.setItem("eb_trend_source", sourceStr);
+        
         const newHistory = [{ date: today, trends: enriched }, ...trendHistory.filter(h => h.date !== today)].slice(0, 30);
         setTrendHistory(newHistory); lsSet("eb_trends_history", newHistory);
-        showToast("✅ Generare completă!");
+        
+        // Afișăm Toast în funcție de sursă
+        if (isTrendsActive) {
+          showToast("✅ Generat cu succes (date reale Google Trends)", "ok");
+        } else {
+          showToast("✅ Generat cu succes (bazat pe sezonalitate)", "warn");
+        }
       }
     } catch (e) { showToast("Eroare trends: " + e.message, "err"); }
     setLoading(false); setLoadMsg("");
@@ -773,23 +798,34 @@ Format JSON: {"recomandari":[{"nume":"...","motiv":"...","idei":["..."],"faceboo
         )}
 
   {/* TAB 2: TRENDS */}
-        {tab === "trends" && (
-          <div>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20, flexWrap:"wrap", gap:12 }}>
+<div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20, flexWrap:"wrap", gap:12 }}>
               <div>
-                <h2 style={{ fontFamily:"'Bricolage Grotesque'", fontSize:19, marginBottom:4 }}>🔥 Top 10 Produse</h2>
+                <h2 style={{ fontFamily:"'Bricolage Grotesque'", fontSize:19, marginBottom:4, display: "flex", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
+                  🔥 Top 10 Produse
+                  {trends && trendSource === "google" && (
+                    <span style={{ fontSize:10, background:"rgba(74,222,128,0.1)", color:"#4ade80", padding:"3px 8px", borderRadius:6, fontWeight: 700, border: "1px solid rgba(74,222,128,0.2)" }}>
+                      ⚡ VERIFICAT GOOGLE TRENDS
+                    </span>
+                  )}
+                  {trends && trendSource === "seasonality" && (
+                    <span style={{ fontSize:10, background:"rgba(251,191,36,0.1)", color:"#fbbf24", padding:"3px 8px", borderRadius:6, fontWeight: 700, border: "1px solid rgba(251,191,36,0.2)" }}>
+                      🍂 BAZAT PE SEZONALITATE
+                    </span>
+                  )}
+                </h2>
                 <p style={{ color:C.muted, fontSize:13 }}>Analiză bazată pe sezonalitate și Google Trends · {catalog.length} produse</p>
               </div>
               <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems: "center" }}>
                 <button className="btn-s btn-sm" onClick={fetchGoogleTrends} disabled={loading}>📈 Tendințe RO</button>
                 
-                {/* Butoanele de refresh și ștergere cache */}
                 {trends && <button className="btn-s btn-sm" onClick={() => generateTrends(true)}>🔄 Regenerează</button>}
                 <button className="btn-s btn-sm" onClick={() => { 
                   localStorage.removeItem("eb_trends"); 
                   localStorage.removeItem("eb_trends_date"); 
+                  localStorage.removeItem("eb_trend_source");
                   setTrends(null); 
                   setTrendsDate(""); 
+                  setTrendSource("");
                   showToast("Cache-ul a fost șters. Poți genera din nou."); 
                 }}>🗑️ Șterge cache</button>
                 
