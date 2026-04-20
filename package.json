@@ -1,7 +1,7 @@
 {
   "name": "ecobites-hub",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,11 +10,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "node-fetch": "^2.7.0",
+    "clsx": "^2.1.1",
     "papaparse": "^5.5.3",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "zustand": "^4.5.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
